@@ -72,5 +72,6 @@ func GetDefaultConfig() *Config {
 		DiscoveryMode: DC_MODE_STATIC,
 		SingleMode:    false,
 		ListenPort:    6969,
+		NodeAddrs:     []net.TCPAddr{},
 	}
 }
