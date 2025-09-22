@@ -1,3 +1,7 @@
 package nodosum
 
-type Config struct{}
+import "log/slog"
+
+type Config struct{
+	logger *slog.Logger
+}

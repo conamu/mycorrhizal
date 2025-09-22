@@ -1,10 +1,22 @@
 package mycorrizal
 
+import "log/slog"
+
 type Mycorrizal interface {
+	Start() error
 }
 
-type mycorrizal struct{}
+type mycorrizal struct{
+	l *slog.Logger
+}
 
 func New(cfg *Config) (Mycorrizal, error) {
-	return &mycorrizal{}, nil
+	return &mycorrizal{
+		l: cfg.logger,
+	}, nil
+}
+
+func (mc *mycorrizal) Start() error {
+	mc.l.Info("mycorrizal started")
+	return nil
 }
