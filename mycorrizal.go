@@ -16,6 +16,7 @@ import (
 
 type Mycorrizal interface {
 	Start() error
+	Shutdown() error
 }
 
 type mycorrizal struct {
@@ -96,6 +97,11 @@ func New(cfg *Config) (Mycorrizal, error) {
 
 func (mc *mycorrizal) Start() error {
 	mc.logger.Info("mycorrizal started")
+	return nil
+}
+
+func (mc *mycorrizal) Shutdown() error {
+	mc.logger.Info("mycorrizal shutting down")
 	return nil
 }
 
