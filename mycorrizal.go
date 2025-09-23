@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/conamu/mycorrizal/internal/nodosum"
 	"github.com/google/uuid"
 )
 
@@ -22,12 +23,15 @@ type Mycorrizal interface {
 type mycorrizal struct {
 	nodeId        string
 	ctx           context.Context
+	wg            *sync.WaitGroup
+	cancel        context.CancelFunc
 	logger        *slog.Logger
 	httpClient    *http.Client
 	connReg       *connectionRegistry
 	discoveryMode int
 	nodeAddrs     []net.TCPAddr
 	singleMode    bool
+	nodosum       *nodosum.Nodosum
 }
 
 func New(cfg *Config) (Mycorrizal, error) {
@@ -83,25 +87,47 @@ func New(cfg *Config) (Mycorrizal, error) {
 		cfg.Logger.Info("Node running in single mode, no Cluster connections")
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	wg := &sync.WaitGroup{}
+
+	nodosumConfig := &nodosum.Config{
+		Ctx:        ctx,
+		ListenPort: cfg.ListenPort,
+		Logger:     cfg.Logger,
+		Wg:         wg,
+	}
+
+	ndsm, err := nodosum.New(nodosumConfig)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
 	return &mycorrizal{
 		nodeId:        id,
 		ctx:           ctx,
+		wg:            wg,
+		cancel:        cancel,
 		logger:        cfg.Logger,
 		httpClient:    httpClient,
 		connReg:       newConnectionRegistry(),
 		discoveryMode: cfg.DiscoveryMode,
 		nodeAddrs:     cfg.NodeAddrs,
 		singleMode:    cfg.SingleMode,
+		nodosum:       ndsm,
 	}, nil
 }
 
 func (mc *mycorrizal) Start() error {
-	mc.logger.Info("mycorrizal started")
+	mc.logger.Info("mycorrizal starting")
+	mc.nodosum.Start()
+	mc.logger.Info("mycorrizal startup complete")
 	return nil
 }
 
 func (mc *mycorrizal) Shutdown() error {
 	mc.logger.Info("mycorrizal shutting down")
+	mc.logger.Info("mycorrizal shutdown complete")
 	return nil
 }
 

@@ -1,7 +1,14 @@
 package nodosum
 
-import "log/slog"
+import (
+	"context"
+	"log/slog"
+	"sync"
+)
 
-type Config struct{
-	logger *slog.Logger
+type Config struct {
+	Ctx        context.Context
+	ListenPort int
+	Logger     *slog.Logger
+	Wg         *sync.WaitGroup
 }
