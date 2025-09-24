@@ -91,11 +91,12 @@ func New(cfg *Config) (Mycorrizal, error) {
 	wg := &sync.WaitGroup{}
 
 	nodosumConfig := &nodosum.Config{
-		NodeId:     id,
-		Ctx:        ctx,
-		ListenPort: cfg.ListenPort,
-		Logger:     cfg.Logger,
-		Wg:         wg,
+		NodeId:           id,
+		Ctx:              ctx,
+		ListenPort:       cfg.ListenPort,
+		Logger:           cfg.Logger,
+		Wg:               wg,
+		HandshakeTimeout: cfg.HandshakeTimeout,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)

@@ -3,11 +3,16 @@ package nodosum
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
+	"time"
+
+	"github.com/conamu/mycorrizal/internal/packet"
 )
 
 /*
@@ -26,13 +31,14 @@ SCOPE
 */
 
 type Nodosum struct {
-	nodeId          string
-	ctx             context.Context
-	listener        *net.TCPListener
-	registry        *nodeRegistry
-	logger          *slog.Logger
-	channelRegistry *sync.Map
-	wg              *sync.WaitGroup
+	nodeId           string
+	ctx              context.Context
+	listener         *net.TCPListener
+	registry         *nodeRegistry
+	logger           *slog.Logger
+	channelRegistry  *sync.Map
+	wg               *sync.WaitGroup
+	handshakeTimeout time.Duration
 }
 
 type nodeConnChannel struct {
@@ -52,6 +58,7 @@ func (n *Nodosum) createNewChannel(id string, conn *net.TCPConn) {
 }
 
 func (n *Nodosum) closeConnChannel(id string) {
+	n.logger.Debug("closing connection channel for " + id)
 	c, ok := n.channelRegistry.Load(id)
 	if ok {
 		conn := c.(*nodeConnChannel)
@@ -74,13 +81,14 @@ func New(cfg *Config) (*Nodosum, error) {
 	registry := newNodeRegistry()
 
 	return &Nodosum{
-		nodeId:          cfg.NodeId,
-		ctx:             cfg.Ctx,
-		listener:        tcpListener,
-		registry:        registry,
-		logger:          cfg.Logger,
-		channelRegistry: &sync.Map{},
-		wg:              cfg.Wg,
+		nodeId:           cfg.NodeId,
+		ctx:              cfg.Ctx,
+		listener:         tcpListener,
+		registry:         registry,
+		logger:           cfg.Logger,
+		channelRegistry:  &sync.Map{},
+		wg:               cfg.Wg,
+		handshakeTimeout: cfg.HandshakeTimeout,
 	}, nil
 }
 
@@ -135,29 +143,53 @@ func (n *Nodosum) listen() error {
 
 func (n *Nodosum) handleConn(tcpConn *net.TCPConn) {
 	defer n.wg.Done()
-	_, err := tcpConn.Write([]byte(n.nodeId))
+
+	p, err := packet.Pack("HELLO", []byte(n.nodeId))
+	if err != nil {
+		// Return here since unsuccessful HELLO packet won´t get us a connection any ways
+		n.logger.Error("error packing packet", "error", err.Error())
+		return
+	}
+
+	numWrittenBytes, err := tcpConn.Write(p)
 	if err != nil {
 		n.logger.Error("error sending node id to tcp connection", err.Error())
 	}
-	buff := make([]byte, 1024)
-	i, err := tcpConn.Read(buff)
-	if err != nil {
-		n.logger.Error("error reading node id from tcp connection", err.Error())
+	if numWrittenBytes != len(p) {
+		n.logger.Warn("packet contains more bytes than written to connection")
 	}
-	nodeConnId := string(buff[:i])
+	buff := make([]byte, 40690000)
+	// Set a deadline in which a client needs to answer, else cut the connection assuming he don´t speak our language
+	err = tcpConn.SetReadDeadline(time.Now().Add(n.handshakeTimeout))
+	if err != nil {
+		n.logger.Error("error setting read deadline", err.Error())
+	}
+	numReadBytes, err := tcpConn.Read(buff)
+	if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
+		tcpConn.Close()
+		return
+	}
+	if err != nil {
+		n.logger.Error("error reading node id from tcp connection", "error", err.Error())
+	}
+
+	cmd, data, err := packet.Unpack(buff[:numReadBytes])
+	if err != nil {
+		tcpConn.Close()
+		n.logger.Error("error unpacking glutamate packet", "error", err.Error(), "nBytes", numReadBytes, "remote", tcpConn.RemoteAddr())
+		return
+	}
+
+	fmt.Println(cmd, string(data))
+
+	nodeConnId := string(data)
 
 	n.createNewChannel(nodeConnId, tcpConn)
 	n.wg.Add(1)
 	go n.rwLoop(nodeConnId)
 	n.wg.Go(
 		func() {
-			for {
-				if _, exists := n.channelRegistry.Load("debug-id\r\n"); exists {
-					break
-				}
-			}
-
-			v, _ := n.channelRegistry.Load("debug-id\r\n")
+			v, _ := n.channelRegistry.Load(nodeConnId)
 			connChan := v.(*nodeConnChannel)
 
 			for {
@@ -165,13 +197,21 @@ func (n *Nodosum) handleConn(tcpConn *net.TCPConn) {
 				case <-n.ctx.Done():
 					return
 				case msg := <-connChan.readChan:
-					command := string(msg)
-					log.Println(command)
-					if command == "ID\r\n" {
-						connChan.writeChan <- []byte(n.nodeId + "\r\n")
+					command, data, err := packet.Unpack(msg)
+					if err != nil {
+						n.logger.Error("error unpacking glutamate packet", "error", err.Error())
 					}
-					if command == "EXIT\r\n" {
-						n.closeConnChannel("debug-id\r\n")
+					log.Println(command)
+					log.Println(string(data))
+					if command == "ID" {
+						p, err := packet.Pack("ID", []byte(n.nodeId))
+						if err != nil {
+							n.logger.Error("error packing glutamate packet", "error", err.Error())
+						}
+						connChan.writeChan <- p
+					}
+					if command == "EXIT" {
+						n.closeConnChannel(nodeConnId)
 						return
 					}
 				}
@@ -186,7 +226,10 @@ func (n *Nodosum) rwLoop(id string) {
 	// Write Loop
 	n.wg.Go(
 		func() {
-			v, _ := n.channelRegistry.Load(id)
+			v, ok := n.channelRegistry.Load(id)
+			if !ok {
+				return
+			}
 			connChan := v.(*nodeConnChannel)
 
 			for {
@@ -212,7 +255,10 @@ func (n *Nodosum) rwLoop(id string) {
 	// Read Loop
 	n.wg.Go(
 		func() {
-			v, _ := n.channelRegistry.Load(id)
+			v, ok := n.channelRegistry.Load(id)
+			if !ok {
+				return
+			}
 			connChan := v.(*nodeConnChannel)
 
 			for {
@@ -222,17 +268,19 @@ func (n *Nodosum) rwLoop(id string) {
 					n.closeConnChannel(id)
 					return
 				default:
-					buff := make([]byte, 1024)
+					buff := make([]byte, 40960000)
 					i, err := connChan.conn.Read(buff)
-					if errors.Is(err, net.ErrClosed) {
+					if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) {
+						n.logger.Error("error reading from tcp connection", "error", err.Error())
 						n.closeConnChannel(id)
-						continue
+						return
 					}
 					if errors.Is(err, io.EOF) {
+						n.logger.Error("error reading from tcp connection", "error", err.Error())
 						continue
 					}
 					if err != nil {
-						log.Println("error reading from tcp connection", err.Error())
+						n.logger.Error("error reading from tcp connection", "error", err.Error())
 						continue
 					}
 					msg := string(buff[:i])

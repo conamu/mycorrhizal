@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"time"
 )
 
 const (
@@ -60,6 +61,12 @@ type Config struct {
 	*/
 	SingleMode bool
 	ListenPort int
+	/*
+		HandshakeTimeout defines the duration in which a client has to answer before conn is dropped.
+
+		Default: 2 seconds
+	*/
+	HandshakeTimeout time.Duration
 }
 
 func GetDefaultConfig() *Config {
@@ -69,9 +76,10 @@ func GetDefaultConfig() *Config {
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
 		})),
-		DiscoveryMode: DC_MODE_STATIC,
-		SingleMode:    false,
-		ListenPort:    6969,
-		NodeAddrs:     []net.TCPAddr{},
+		DiscoveryMode:    DC_MODE_STATIC,
+		SingleMode:       false,
+		ListenPort:       6969,
+		NodeAddrs:        []net.TCPAddr{},
+		HandshakeTimeout: 2 * time.Second,
 	}
 }
