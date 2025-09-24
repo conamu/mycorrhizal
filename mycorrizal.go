@@ -91,6 +91,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 	wg := &sync.WaitGroup{}
 
 	nodosumConfig := &nodosum.Config{
+		NodeId:     id,
 		Ctx:        ctx,
 		ListenPort: cfg.ListenPort,
 		Logger:     cfg.Logger,
@@ -127,6 +128,10 @@ func (mc *mycorrizal) Start() error {
 
 func (mc *mycorrizal) Shutdown() error {
 	mc.logger.Info("mycorrizal shutting down")
+	mc.cancel()
+	mc.nodosum.Shutdown()
+	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
+	mc.wg.Wait()
 	mc.logger.Info("mycorrizal shutdown complete")
 	return nil
 }

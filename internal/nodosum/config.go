@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	NodeId     string
 	Ctx        context.Context
 	ListenPort int
 	Logger     *slog.Logger
