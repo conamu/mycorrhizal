@@ -58,3 +58,4 @@ In a way, we are controlling the Mycorrhizal Network via Pulses with Pulse!
 
 - Add advertisement/registering of services
 - More efficient Network topology for cluster formation (cohorts of instances build a small star, multiple stars connect)
+- structure nodosum -> commands,packet,acl -> cytoplasm,hypha,mycel,pulse

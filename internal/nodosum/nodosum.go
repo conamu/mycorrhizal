@@ -3,7 +3,6 @@ package nodosum
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"log/slog"
 	"net"
 	"sync"
@@ -30,8 +29,7 @@ type Nodosum struct {
 	ctx              context.Context
 	listener         net.Listener
 	logger           *slog.Logger
-	nodeRegistry     *sync.Map
-	channelRegistry  *sync.Map
+	connections      *sync.Map
 	wg               *sync.WaitGroup
 	handshakeTimeout time.Duration
 	tlsEnabled       bool
@@ -62,8 +60,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		ctx:              cfg.Ctx,
 		listener:         listener,
 		logger:           cfg.Logger,
-		nodeRegistry:     &sync.Map{},
-		channelRegistry:  &sync.Map{},
+		connections:      &sync.Map{},
 		wg:               cfg.Wg,
 		handshakeTimeout: cfg.HandshakeTimeout,
 		tlsEnabled:       cfg.TlsEnabled,
@@ -83,55 +80,51 @@ func (n *Nodosum) Start() {
 }
 
 func (n *Nodosum) Shutdown() {
-	n.channelRegistry.Range(func(k, v interface{}) bool {
+	n.connections.Range(func(k, v interface{}) bool {
 		id := k.(string)
 		n.closeConnChannel(id)
 		return true
 	})
 }
 
-func (n *Nodosum) listen() error {
-	n.wg.Go(
-		func() {
-			<-n.ctx.Done()
-			err := n.listener.Close()
-			if err != nil {
-				n.logger.Info("listener close failed", "error", err.Error())
-			}
-			n.logger.Info("listener closed")
-		},
-	)
+// Broadcast synchronously sends a command to all nodes and returns all answered commands
+func (n *Nodosum) Broadcast(c Command) []Command {
+	answeredCommands := []Command{}
 
-	// Listener Accept Loop
-	for {
-		select {
-		case <-n.ctx.Done():
-			return nil
-		default:
-			conn, err := n.listener.Accept()
-			if err != nil {
-				if !errors.Is(err, net.ErrClosed) {
-					n.logger.Error("error accepting TCP connection", err.Error())
-				}
-				continue
-			}
-			if n.tlsEnabled {
-				tlsConn := tls.Server(conn, n.tlsConfig)
-				hsCtx, _ := context.WithDeadline(n.ctx, time.Now().Add(n.handshakeTimeout))
-				err = tlsConn.HandshakeContext(hsCtx)
-				if err != nil {
-					n.logger.Warn("error setting handshake context", "error", err.Error())
-				}
-				err = tlsConn.Handshake()
-				if err != nil {
-					n.logger.Error("error handshake TLS connection", "error", err.Error(), "remote", conn.RemoteAddr())
-					conn.Close()
-					return nil
-				}
-				conn = tlsConn
-			}
-			n.wg.Add(1)
-			go n.handleConn(conn)
+	n.connections.Range(func(k, v interface{}) bool {
+		id := k.(string)
+		connChan := v.(*nodeConn)
+		n.logger.Debug("broadcasting to node connection", "id", id)
+		err := c.packAndSend(connChan.writeChan)
+		if err != nil {
+			n.logger.Error("broadcast error", "error", err.Error())
 		}
+		err = c.receiveAndUnpack(connChan.readChan)
+		if err != nil {
+			n.logger.Error("broadcast receive error", "error", err.Error())
+		}
+		answeredCommands = append(answeredCommands, c)
+		return true
+	})
+	return nil
+}
+
+// Send sends a command to one node by id and returns the answered command
+func (n *Nodosum) Send(id string, c Command) Command {
+	n.logger.Debug("sending to node connection", "id", id)
+
+	val, ok := n.connections.Load(id)
+	if !ok {
+		return nil
 	}
+	connChann := val.(*nodeConn)
+	err := c.packAndSend(connChann.writeChan)
+	if err != nil {
+		n.logger.Error("send error", "error", err.Error())
+	}
+	err = c.receiveAndUnpack(connChann.readChan)
+	if err != nil {
+		n.logger.Error("send receive error", "error", err.Error())
+	}
+	return c
 }

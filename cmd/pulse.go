@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/conamu/mycorrizal/internal/nodosum"
-	"github.com/conamu/mycorrizal/internal/packet"
 )
 
 func main() {
@@ -58,7 +57,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	pack, err := packet.Unpack(buff)
+	pack, err := nodosum.unpack(buff)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,7 +66,7 @@ func main() {
 		log.Fatal("Server handshake failed")
 	}
 
-	p, err := packet.Pack(nodosum.HELLO, []byte("CLI-"+string(pack.Data)), "")
+	p, err := nodosum.pack(nodosum.HELLO, []byte("CLI-"+string(pack.Data)), "")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,7 +95,7 @@ func main() {
 				}
 
 				if args[0] == "exit" {
-					p, err := packet.Pack(nodosum.EXIT, nil, token)
+					p, err := nodosum.pack(nodosum.EXIT, nil, token)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -114,7 +113,7 @@ func main() {
 				}
 
 				if args[0] == "id" {
-					p, err := packet.Pack(nodosum.ID, nil, token)
+					p, err := nodosum.pack(nodosum.ID, nil, token)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -128,7 +127,7 @@ func main() {
 					if err != nil {
 						log.Fatal(err)
 					}
-					pack, err := packet.Unpack(buff[:n])
+					pack, err := nodosum.unpack(buff[:n])
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -136,7 +135,7 @@ func main() {
 				}
 
 				if args[0] == "set" {
-					p, err := packet.Pack(nodosum.SET, []byte(args[2]), token)
+					p, err := nodosum.pack(nodosum.SET, []byte(args[2]), token)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -150,7 +149,7 @@ func main() {
 					if err != nil {
 						log.Fatal(err)
 					}
-					pack, err := packet.Unpack(buff[:n])
+					pack, err := nodosum.unpack(buff[:n])
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -158,7 +157,7 @@ func main() {
 				}
 
 				if args[0] == "get" {
-					p, err := packet.Pack(nodosum.GET, []byte(args[2]), token)
+					p, err := nodosum.pack(nodosum.GET, []byte(args[2]), token)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -172,7 +171,7 @@ func main() {
 					if err != nil {
 						log.Fatal(err)
 					}
-					pack, err := packet.Unpack(buff[:n])
+					pack, err := nodosum.unpack(buff[:n])
 					if err != nil {
 						log.Fatal(err)
 					}

@@ -1,4 +1,4 @@
-package packet
+package nodosum
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type GlutamatePacket struct {
+type glutamatePacket struct {
 	Version   int8
 	ReceiveTs time.Time
 	SendTs    time.Time
@@ -15,8 +15,8 @@ type GlutamatePacket struct {
 	Token     string
 }
 
-func Pack(cmd int, data []byte, token string) ([]byte, error) {
-	packet := &GlutamatePacket{
+func pack(cmd int, data []byte, token string) ([]byte, error) {
+	packet := &glutamatePacket{
 		Version: 1,
 		SendTs:  time.Now(),
 		Command: cmd,
@@ -33,8 +33,8 @@ func Pack(cmd int, data []byte, token string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func Unpack(data []byte) (*GlutamatePacket, error) {
-	var packet *GlutamatePacket
+func unpack(data []byte) (*glutamatePacket, error) {
+	var packet *glutamatePacket
 	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(&packet)
 	if err != nil {
 		return nil, err
