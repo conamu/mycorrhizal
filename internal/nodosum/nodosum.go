@@ -87,7 +87,9 @@ func New(cfg *Config) (*Nodosum, error) {
 	addrString := lAddr.String()
 
 	if cfg.TlsEnabled {
+		cfg.Logger.Debug("running with TLS enabled")
 		tlsConf = &tls.Config{
+			ServerName:   "localhost",
 			RootCAs:      cfg.TlsCACert,
 			Certificates: []tls.Certificate{*cfg.TlsCert},
 		}
@@ -158,10 +160,13 @@ func (n *Nodosum) listen() error {
 			if n.tlsEnabled {
 				tlsConn := tls.Server(conn, n.tlsConfig)
 				hsCtx, _ := context.WithDeadline(n.ctx, time.Now().Add(n.handshakeTimeout))
-				tlsConn.HandshakeContext(hsCtx)
+				err = tlsConn.HandshakeContext(hsCtx)
+				if err != nil {
+					n.logger.Warn("error setting handshake context", "error", err.Error())
+				}
 				err = tlsConn.Handshake()
 				if err != nil {
-					n.logger.Error("error handshake TLS connection", err.Error())
+					n.logger.Error("error handshake TLS connection", "error", err.Error(), "remote", conn.RemoteAddr())
 					conn.Close()
 					return nil
 				}

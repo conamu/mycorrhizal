@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"net"
@@ -16,11 +18,36 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	caCert, err := os.ReadFile("ca.pem")
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	conn, err := net.Dial("tcp", "localhost:6969")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
+
+	tlsConn := tls.Client(conn, &tls.Config{
+		ServerName:   "localhost",
+		RootCAs:      caCertPool,
+		Certificates: []tls.Certificate{cert},
+	})
+
+	err = tlsConn.Handshake()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conn = tlsConn
 
 	buff := make([]byte, 40960000)
 
