@@ -80,6 +80,26 @@ func main() {
 					fmt.Println(string(data))
 				}
 				if s == "exit" {
+					p, err := packet.Pack("EXIT", nil)
+					if err != nil {
+						log.Fatal(err)
+					}
+					_, err = conn.Write(p)
+					if err != nil {
+						log.Fatal(err)
+					}
+					idBuff := make([]byte, 40960000)
+					n, err := conn.Read(idBuff)
+					if err != nil {
+						log.Fatal(err)
+					}
+					command, data, err := packet.Unpack(idBuff[:n])
+					if err != nil {
+						log.Fatal(err)
+					}
+					fmt.Println(command)
+					fmt.Println(string(data))
+
 					err = conn.Close()
 					if err != nil {
 						log.Fatal(err)

@@ -43,15 +43,21 @@ type Nodosum struct {
 
 type nodeConnChannel struct {
 	connId    string
+	ctx       context.Context
+	cancel    context.CancelFunc
 	conn      *net.TCPConn
 	readChan  chan []byte
 	writeChan chan []byte
 }
 
 func (n *Nodosum) createNewChannel(id string, conn *net.TCPConn) {
+	ctx, cancel := context.WithCancel(n.ctx)
+
 	n.channelRegistry.Store(id, &nodeConnChannel{
 		connId:    id,
 		conn:      conn,
+		ctx:       ctx,
+		cancel:    cancel,
 		readChan:  make(chan []byte),
 		writeChan: make(chan []byte),
 	})
@@ -62,6 +68,7 @@ func (n *Nodosum) closeConnChannel(id string) {
 	c, ok := n.channelRegistry.Load(id)
 	if ok {
 		conn := c.(*nodeConnChannel)
+		conn.cancel()
 		err := conn.conn.Close()
 		if err != nil && !errors.Is(err, net.ErrClosed) {
 			n.logger.Error("error closing comms channels for", "error", err.Error())
@@ -184,17 +191,25 @@ func (n *Nodosum) handleConn(tcpConn *net.TCPConn) {
 
 	nodeConnId := string(data)
 
+	err = tcpConn.SetReadDeadline(time.Time{})
+	if err != nil {
+		n.logger.Error("error setting read deadline", err.Error())
+	}
+
 	n.createNewChannel(nodeConnId, tcpConn)
 	n.wg.Add(1)
 	go n.rwLoop(nodeConnId)
 	n.wg.Go(
 		func() {
-			v, _ := n.channelRegistry.Load(nodeConnId)
+			v, ok := n.channelRegistry.Load(nodeConnId)
+			if !ok {
+				return
+			}
 			connChan := v.(*nodeConnChannel)
 
 			for {
 				select {
-				case <-n.ctx.Done():
+				case <-connChan.ctx.Done():
 					return
 				case msg := <-connChan.readChan:
 					command, data, err := packet.Unpack(msg)
@@ -234,14 +249,12 @@ func (n *Nodosum) rwLoop(id string) {
 
 			for {
 				select {
-				case <-n.ctx.Done():
+				case <-connChan.ctx.Done():
 					n.logger.Debug("write loop for " + id + " cancelled")
-					n.closeConnChannel(id)
 					return
 				case msg := <-connChan.writeChan:
 					if msg == nil {
-						n.closeConnChannel(id)
-						return
+						continue
 					}
 					_, err := connChan.conn.Write(msg)
 					if err != nil {
@@ -263,20 +276,15 @@ func (n *Nodosum) rwLoop(id string) {
 
 			for {
 				select {
-				case <-n.ctx.Done():
+				case <-connChan.ctx.Done():
 					n.logger.Debug("read loop for " + id + " cancelled")
-					n.closeConnChannel(id)
 					return
 				default:
 					buff := make([]byte, 40960000)
 					i, err := connChan.conn.Read(buff)
-					if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) {
+					if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) {
 						n.logger.Error("error reading from tcp connection", "error", err.Error())
 						n.closeConnChannel(id)
-						return
-					}
-					if errors.Is(err, io.EOF) {
-						n.logger.Error("error reading from tcp connection", "error", err.Error())
 						continue
 					}
 					if err != nil {
