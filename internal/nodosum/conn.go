@@ -13,7 +13,7 @@ import (
 func (n *Nodosum) handleConn(conn net.Conn) {
 	defer n.wg.Done()
 
-	p, err := packet.Pack("HELLO", []byte(n.nodeId))
+	p, err := packet.Pack(HELLO, []byte(n.nodeId), "")
 	if err != nil {
 		// Return here since unsuccessful HELLO packet won´t get us a connection any ways
 		n.logger.Error("error packing packet", "error", err.Error())
@@ -42,19 +42,19 @@ func (n *Nodosum) handleConn(conn net.Conn) {
 		n.logger.Error("error reading node id from tcp connection", "error", err.Error())
 	}
 
-	cmd, data, err := packet.Unpack(buff[:numReadBytes])
+	pack, err := packet.Unpack(buff[:numReadBytes])
 	if err != nil {
 		conn.Close()
 		n.logger.Error("error unpacking glutamate packet", "error", err.Error(), "nBytes", numReadBytes, "remote", conn.RemoteAddr())
 		return
 	}
 
-	if cmd != "HELLO" {
+	if pack.Command != HELLO {
 		conn.Close()
-		n.logger.Warn("client did not answer correctly with HELLO", "cmd", cmd, "remote", conn.RemoteAddr())
+		n.logger.Warn("client did not answer correctly with HELLO", "remote", conn.RemoteAddr())
 	}
 
-	nodeConnId := string(data)
+	nodeConnId := string(pack.Data)
 
 	err = conn.SetReadDeadline(time.Time{})
 	if err != nil {
@@ -77,19 +77,29 @@ func (n *Nodosum) handleConn(conn net.Conn) {
 				case <-connChan.ctx.Done():
 					return
 				case msg := <-connChan.readChan:
-					command, _, err := packet.Unpack(msg)
+					pack, err := packet.Unpack(msg)
 					if err != nil {
 						n.logger.Error("error unpacking glutamate packet", "error", err.Error())
 					}
-					n.logger.Debug("received command", "command", command)
-					if command == "ID" {
-						p, err := packet.Pack("ID", []byte(n.nodeId))
+					n.logger.Debug("received command", "command", pack.Command)
+
+					if !middleware(pack.Command, pack.Token) {
+						p, err := packet.Pack(DENY, []byte("not authorized for this command"), pack.Token)
+						n.logger.Warn("unauthorized command", "command", pack.Command, "token", pack.Token)
 						if err != nil {
 							n.logger.Error("error packing glutamate packet", "error", err.Error())
 						}
 						connChan.writeChan <- p
+						continue
 					}
-					if command == "EXIT" {
+
+					handler := n.handler(pack, connChan.writeChan)
+					shouldReturn, err := handler()
+					if err != nil {
+						n.logger.Error("error handling glutamate command packet", "error", err.Error())
+					}
+
+					if shouldReturn {
 						n.closeConnChannel(nodeConnId)
 						return
 					}

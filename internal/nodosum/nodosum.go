@@ -16,12 +16,12 @@ SCOPE
 
 - Discover Instances via Consul API/DNS-SD
 - Establish Connections in Star Network Topology (all nodes have a connection to all nodes)
-- Manage connections and keep them up
+- Manage connections and keep them up X
 - Provide communication interface to abstract away the cluster
   (this should feel like one big App, even though it could be spread on 10 nodes/instances)
 - Provide Interface to create, read, update and delete cluster store resources
   and find/set their location on the cluster.
-- Authenticate and Encrypt all Intra-Cluster Communication
+- Authenticate and Encrypt all Intra-Cluster Communication X
 
 */
 
@@ -102,6 +102,7 @@ func (n *Nodosum) listen() error {
 		},
 	)
 
+	// Listener Accept Loop
 	for {
 		select {
 		case <-n.ctx.Done():

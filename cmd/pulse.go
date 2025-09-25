@@ -9,7 +9,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 
+	"github.com/conamu/mycorrizal/internal/nodosum"
 	"github.com/conamu/mycorrizal/internal/packet"
 )
 
@@ -56,16 +58,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	command, data, err := packet.Unpack(buff)
+	pack, err := packet.Unpack(buff)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if command != "HELLO" {
+	if pack.Command != nodosum.HELLO {
 		log.Fatal("Server handshake failed")
 	}
 
-	p, err := packet.Pack("HELLO", []byte("CLI-"+string(data)))
+	p, err := packet.Pack(nodosum.HELLO, []byte("CLI-"+string(pack.Data)), "")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -84,30 +86,17 @@ func main() {
 		default:
 			for scanner.Scan() {
 				s := scanner.Text()
-				fmt.Println(s)
-				if s == "id" {
-					p, err := packet.Pack("ID", nil)
-					if err != nil {
-						log.Fatal(err)
-					}
-					_, err = conn.Write(p)
-					if err != nil {
-						log.Fatal(err)
-					}
-					idBuff := make([]byte, 40960000)
-					n, err := conn.Read(idBuff)
-					if err != nil {
-						log.Fatal(err)
-					}
-					command, data, err := packet.Unpack(idBuff[:n])
-					if err != nil {
-						log.Fatal(err)
-					}
-					fmt.Println(command)
-					fmt.Println(string(data))
+				token := ""
+				args := strings.Split(s, " ")
+				if len(args) == 2 {
+					token = args[1]
 				}
-				if s == "exit" {
-					p, err := packet.Pack("EXIT", nil)
+				if len(args) == 0 {
+					continue
+				}
+
+				if args[0] == "exit" {
+					p, err := packet.Pack(nodosum.EXIT, nil, token)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -122,6 +111,72 @@ func main() {
 					}
 					cancel()
 					break
+				}
+
+				if args[0] == "id" {
+					p, err := packet.Pack(nodosum.ID, nil, token)
+					if err != nil {
+						log.Fatal(err)
+					}
+					_, err = conn.Write(p)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					buff := make([]byte, 40960000)
+					n, err := conn.Read(buff)
+					if err != nil {
+						log.Fatal(err)
+					}
+					pack, err := packet.Unpack(buff[:n])
+					if err != nil {
+						log.Fatal(err)
+					}
+					fmt.Println(string(pack.Data))
+				}
+
+				if args[0] == "set" {
+					p, err := packet.Pack(nodosum.SET, []byte(args[2]), token)
+					if err != nil {
+						log.Fatal(err)
+					}
+					_, err = conn.Write(p)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					buff := make([]byte, 40960000)
+					n, err := conn.Read(buff)
+					if err != nil {
+						log.Fatal(err)
+					}
+					pack, err := packet.Unpack(buff[:n])
+					if err != nil {
+						log.Fatal(err)
+					}
+					fmt.Println(string(pack.Data))
+				}
+
+				if args[0] == "GET" {
+					p, err := packet.Pack(nodosum.GET, []byte(args[2]), token)
+					if err != nil {
+						log.Fatal(err)
+					}
+					_, err = conn.Write(p)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					buff := make([]byte, 40960000)
+					n, err := conn.Read(buff)
+					if err != nil {
+						log.Fatal(err)
+					}
+					pack, err := packet.Unpack(buff[:n])
+					if err != nil {
+						log.Fatal(err)
+					}
+					fmt.Println(string(pack.Data))
 				}
 			}
 		}
