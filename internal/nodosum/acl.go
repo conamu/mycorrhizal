@@ -6,7 +6,7 @@ var godToken = token{
 		EXIT:  true,
 		HELLO: true,
 		ID:    true,
-		GET:   true,
+		SET:   true,
 	},
 }
 
@@ -15,7 +15,7 @@ var anonymousToken = token{
 	commands: map[int]bool{
 		EXIT:  true,
 		HELLO: true,
-		SET:   true,
+		GET:   true,
 	},
 }
 
@@ -26,10 +26,8 @@ type token struct {
 
 func middleware(cmd int, token string) bool {
 
-	if token == anonymousToken.token {
-		if _, ok := anonymousToken.commands[cmd]; ok {
-			return anonymousToken.commands[cmd]
-		}
+	if public, ok := anonymousToken.commands[cmd]; ok && public {
+		return true
 	}
 
 	if token == godToken.token {

@@ -88,7 +88,7 @@ func main() {
 				s := scanner.Text()
 				token := ""
 				args := strings.Split(s, " ")
-				if len(args) == 2 {
+				if len(args) > 1 {
 					token = args[1]
 				}
 				if len(args) == 0 {
@@ -157,7 +157,7 @@ func main() {
 					fmt.Println(string(pack.Data))
 				}
 
-				if args[0] == "GET" {
+				if args[0] == "get" {
 					p, err := packet.Pack(nodosum.GET, []byte(args[2]), token)
 					if err != nil {
 						log.Fatal(err)
