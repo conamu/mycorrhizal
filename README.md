@@ -1,3 +1,6 @@
+# THIS IS A WIP, WILL NOT YET ACCEPT PRs
+(If you happen to stumble on this project lol)
+
 # Mycorrizal
 The embedded Library for scalable, modern and efficient modular Monoliths
 
