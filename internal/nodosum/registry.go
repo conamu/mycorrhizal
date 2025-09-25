@@ -1,17 +1,49 @@
 package nodosum
 
-import "sync"
+import (
+	"context"
+	"errors"
+	"net"
+)
 
-type nodeRegistry struct {
-	nodes map[string]node
-	lock  *sync.Mutex
+type node struct {
+	id       string
+	addr     *net.TCPAddr
+	connChan *nodeConnChannel
 }
 
-func newNodeRegistry() *nodeRegistry {
-	return &nodeRegistry{
-		nodes: make(map[string]node),
-		lock:  new(sync.Mutex),
+type nodeConnChannel struct {
+	connId    string
+	ctx       context.Context
+	cancel    context.CancelFunc
+	conn      net.Conn
+	readChan  chan []byte
+	writeChan chan []byte
+}
+
+func (n *Nodosum) createNewChannel(id string, conn net.Conn) {
+	ctx, cancel := context.WithCancel(n.ctx)
+
+	n.channelRegistry.Store(id, &nodeConnChannel{
+		connId:    id,
+		conn:      conn,
+		ctx:       ctx,
+		cancel:    cancel,
+		readChan:  make(chan []byte),
+		writeChan: make(chan []byte),
+	})
+}
+
+func (n *Nodosum) closeConnChannel(id string) {
+	n.logger.Debug("closing connection channel for " + id)
+	c, ok := n.channelRegistry.Load(id)
+	if ok {
+		conn := c.(*nodeConnChannel)
+		conn.cancel()
+		err := conn.conn.Close()
+		if err != nil && !errors.Is(err, net.ErrClosed) {
+			n.logger.Error("error closing comms channels for", "error", err.Error())
+		}
 	}
+	n.channelRegistry.Delete(id)
 }
-
-type node struct{}

@@ -49,7 +49,7 @@ func main() {
 
 	conn = tlsConn
 
-	buff := make([]byte, 40960000)
+	buff := make([]byte, 4096)
 
 	_, err = conn.Read(buff)
 	if err != nil {
@@ -115,17 +115,6 @@ func main() {
 					if err != nil {
 						log.Fatal(err)
 					}
-					idBuff := make([]byte, 40960000)
-					n, err := conn.Read(idBuff)
-					if err != nil {
-						log.Fatal(err)
-					}
-					command, data, err := packet.Unpack(idBuff[:n])
-					if err != nil {
-						log.Fatal(err)
-					}
-					fmt.Println(command)
-					fmt.Println(string(data))
 
 					err = conn.Close()
 					if err != nil {
