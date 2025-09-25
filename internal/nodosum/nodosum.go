@@ -2,6 +2,7 @@ package nodosum
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -33,24 +34,26 @@ SCOPE
 type Nodosum struct {
 	nodeId           string
 	ctx              context.Context
-	listener         *net.TCPListener
+	listener         net.Listener
 	registry         *nodeRegistry
 	logger           *slog.Logger
 	channelRegistry  *sync.Map
 	wg               *sync.WaitGroup
 	handshakeTimeout time.Duration
+	tlsEnabled       bool
+	tlsConfig        *tls.Config
 }
 
 type nodeConnChannel struct {
 	connId    string
 	ctx       context.Context
 	cancel    context.CancelFunc
-	conn      *net.TCPConn
+	conn      net.Conn
 	readChan  chan []byte
 	writeChan chan []byte
 }
 
-func (n *Nodosum) createNewChannel(id string, conn *net.TCPConn) {
+func (n *Nodosum) createNewChannel(id string, conn net.Conn) {
 	ctx, cancel := context.WithCancel(n.ctx)
 
 	n.channelRegistry.Store(id, &nodeConnChannel{
@@ -78,24 +81,34 @@ func (n *Nodosum) closeConnChannel(id string) {
 }
 
 func New(cfg *Config) (*Nodosum, error) {
-	var tcpListener = new(net.TCPListener)
+	var tlsConf *tls.Config
 
-	tcpListener, err := net.ListenTCP("tcp", &net.TCPAddr{Port: cfg.ListenPort})
+	lAddr := &net.TCPAddr{Port: cfg.ListenPort}
+	addrString := lAddr.String()
+
+	if cfg.TlsEnabled {
+		tlsConf = &tls.Config{
+			RootCAs:      cfg.TlsCACert,
+			Certificates: []tls.Certificate{*cfg.TlsCert},
+		}
+	}
+	listener, err := net.Listen("tcp", addrString)
 	if err != nil {
 		return nil, err
 	}
-
 	registry := newNodeRegistry()
 
 	return &Nodosum{
 		nodeId:           cfg.NodeId,
 		ctx:              cfg.Ctx,
-		listener:         tcpListener,
+		listener:         listener,
 		registry:         registry,
 		logger:           cfg.Logger,
 		channelRegistry:  &sync.Map{},
 		wg:               cfg.Wg,
 		handshakeTimeout: cfg.HandshakeTimeout,
+		tlsEnabled:       cfg.TlsEnabled,
+		tlsConfig:        tlsConf,
 	}, nil
 }
 
@@ -135,20 +148,32 @@ func (n *Nodosum) listen() error {
 		case <-n.ctx.Done():
 			return nil
 		default:
-			tcpConn, err := n.listener.AcceptTCP()
+			conn, err := n.listener.Accept()
 			if err != nil {
 				if !errors.Is(err, net.ErrClosed) {
 					n.logger.Error("error accepting TCP connection", err.Error())
 				}
 				continue
 			}
+			if n.tlsEnabled {
+				tlsConn := tls.Server(conn, n.tlsConfig)
+				hsCtx, _ := context.WithDeadline(n.ctx, time.Now().Add(n.handshakeTimeout))
+				tlsConn.HandshakeContext(hsCtx)
+				err = tlsConn.Handshake()
+				if err != nil {
+					n.logger.Error("error handshake TLS connection", err.Error())
+					conn.Close()
+					return nil
+				}
+				conn = tlsConn
+			}
 			n.wg.Add(1)
-			go n.handleConn(tcpConn)
+			go n.handleConn(conn)
 		}
 	}
 }
 
-func (n *Nodosum) handleConn(tcpConn *net.TCPConn) {
+func (n *Nodosum) handleConn(tcpConn net.Conn) {
 	defer n.wg.Done()
 
 	p, err := packet.Pack("HELLO", []byte(n.nodeId))

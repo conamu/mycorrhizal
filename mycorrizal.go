@@ -97,6 +97,9 @@ func New(cfg *Config) (Mycorrizal, error) {
 		Logger:           cfg.Logger,
 		Wg:               wg,
 		HandshakeTimeout: cfg.HandshakeTimeout,
+		TlsEnabled:       cfg.ClusterTLSEnabled,
+		TlsCACert:        cfg.ClusterTLSCACert,
+		TlsCert:          cfg.ClusterTLSCert,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)

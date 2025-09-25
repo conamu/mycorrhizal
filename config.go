@@ -66,7 +66,10 @@ type Config struct {
 
 		Default: 2 seconds
 	*/
-	HandshakeTimeout time.Duration
+	HandshakeTimeout  time.Duration
+	ClusterTLSEnabled bool
+	ClusterTLSCACert  *x509.CertPool
+	ClusterTLSCert    *tls.Certificate
 }
 
 func GetDefaultConfig() *Config {

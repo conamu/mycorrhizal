@@ -2,6 +2,8 @@ package nodosum
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"log/slog"
 	"sync"
 	"time"
@@ -14,4 +16,7 @@ type Config struct {
 	HandshakeTimeout time.Duration
 	Logger           *slog.Logger
 	Wg               *sync.WaitGroup
+	TlsEnabled       bool
+	TlsCACert        *x509.CertPool
+	TlsCert          *tls.Certificate
 }
