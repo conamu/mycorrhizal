@@ -6,6 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
+/* TODO:
+Following problem:
+There is only ever one connection between two nodes. Glutamate packets need to have the ability to be "multiplexed"
+so multiple application sub-systems can use this connection, via an ID based or v-channel based system.
+IDEA:
+Attach an ID to each packet. One ID has exactly one Command send and one receive. One Question one answer.
+One concept to be explored is potentially also one ID enabling a chain, like a channel of sorts
+on top of that connection.
+*/
+
 var ComErrUnauthorized = errors.New("not authorized to perform this operation")
 
 type Command interface {
@@ -13,17 +23,24 @@ type Command interface {
 	receiveAndUnpack(readChan chan []byte) error
 }
 type command struct {
+	id       string
 	command  int
 	data     []byte
 	aclToken string
 }
 
-func NewCommand() Command {
-	return &command{}
+func NewCommand(cmd int, data []byte, token string) Command {
+	id := uuid.NewString()
+	return &command{
+		id:       id,
+		command:  cmd,
+		data:     data,
+		aclToken: token,
+	}
 }
 
 func (c *command) packAndSend(writeChan chan []byte) error {
-	packet, err := pack(c.command, c.data, c.aclToken)
+	packet, err := pack(c.id, c.command, c.data, c.aclToken)
 	if err != nil {
 		return err
 	}
@@ -68,7 +85,7 @@ func (n *Nodosum) handler(packet *glutamatePacket, writeChan chan []byte) func()
 	switch packet.Command {
 	case ID:
 		return func() (bool, error) {
-			p, err := pack(REPLY, []byte(n.nodeId), packet.Token)
+			p, err := pack("ID", REPLY, []byte(n.nodeId), packet.Token)
 			if err != nil {
 				return false, errors.Join(errors.New("error packing glutamate packet"), err)
 			}
@@ -83,7 +100,7 @@ func (n *Nodosum) handler(packet *glutamatePacket, writeChan chan []byte) func()
 		return func() (bool, error) {
 			id := uuid.NewString()
 			dataSets[id] = packet.Data
-			p, err := pack(REPLY, []byte(id), packet.Token)
+			p, err := pack("SET", REPLY, []byte(id), packet.Token)
 			if err != nil {
 				return false, errors.Join(errors.New("error packing glutamate packet"), err)
 			}
@@ -97,7 +114,7 @@ func (n *Nodosum) handler(packet *glutamatePacket, writeChan chan []byte) func()
 				stuff = d
 			}
 
-			p, err := pack(REPLY, stuff, packet.Token)
+			p, err := pack("GET", REPLY, stuff, packet.Token)
 			if err != nil {
 				return false, errors.Join(errors.New("error packing glutamate packet"), err)
 			}

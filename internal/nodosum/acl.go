@@ -1,5 +1,13 @@
 package nodosum
 
+/*
+ACLs work with applications to enable secure controlflow.
+Permission structure could be someting like
+APP:METHOD:ACTION
+ex.: CACHE:SET
+ex.: CACHE:USER:READ
+*/
+
 var godToken = token{
 	token: "token",
 	commands: map[int]bool{

@@ -8,6 +8,7 @@ import (
 
 type glutamatePacket struct {
 	Version   int8
+	Id        string
 	ReceiveTs time.Time
 	SendTs    time.Time
 	Command   int
@@ -15,9 +16,10 @@ type glutamatePacket struct {
 	Token     string
 }
 
-func pack(cmd int, data []byte, token string) ([]byte, error) {
+func pack(id string, cmd int, data []byte, token string) ([]byte, error) {
 	packet := &glutamatePacket{
 		Version: 1,
+		Id:      id,
 		SendTs:  time.Now(),
 		Command: cmd,
 		Data:    data,
@@ -33,9 +35,9 @@ func pack(cmd int, data []byte, token string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func unpack(data []byte) (*glutamatePacket, error) {
+func unpack(packetData []byte) (*glutamatePacket, error) {
 	var packet *glutamatePacket
-	err := gob.NewDecoder(bytes.NewBuffer(data)).Decode(&packet)
+	err := gob.NewDecoder(bytes.NewBuffer(packetData)).Decode(&packet)
 	if err != nil {
 		return nil, err
 	}

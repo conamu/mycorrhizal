@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+// TODO: Introduce UDP for connection negotiation
+
 func (n *Nodosum) listen() error {
 	n.wg.Go(
 		func() {
@@ -73,7 +75,7 @@ func (n *Nodosum) handleConn(conn net.Conn) {
 		n.logger.Error("error setting read deadline", err.Error())
 	}
 
-	n.createNewChannel(nodeConnId, conn)
+	n.createConnChannel(nodeConnId, conn)
 	n.wg.Add(1)
 	go n.startRwLoops(nodeConnId)
 }
@@ -89,7 +91,7 @@ func (n *Nodosum) startRwLoops(id string) {
 }
 
 func (n *Nodosum) serverHandshake(conn net.Conn) string {
-	p, err := pack(HELLO, []byte(n.nodeId), "")
+	p, err := pack("HANDSHAKE", HELLO, []byte(n.nodeId), "")
 	if err != nil {
 		// Return here since unsuccessful HELLO packet won´t get us a connection any ways
 		n.logger.Error("error packing packet", "error", err.Error())

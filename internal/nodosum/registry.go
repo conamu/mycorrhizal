@@ -16,7 +16,7 @@ type nodeConn struct {
 	writeChan chan []byte
 }
 
-func (n *Nodosum) createNewChannel(id string, conn net.Conn) {
+func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 	ctx, cancel := context.WithCancel(n.ctx)
 
 	n.connections.Store(id, &nodeConn{
