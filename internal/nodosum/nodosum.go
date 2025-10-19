@@ -25,15 +25,21 @@ SCOPE
 */
 
 type Nodosum struct {
-	nodeId           string
-	ctx              context.Context
-	listener         net.Listener
-	logger           *slog.Logger
-	connections      *sync.Map
-	wg               *sync.WaitGroup
-	handshakeTimeout time.Duration
-	tlsEnabled       bool
-	tlsConfig        *tls.Config
+	nodeId      string
+	ctx         context.Context
+	listener    net.Listener
+	logger      *slog.Logger
+	connections *sync.Map
+	// globalReadChannel transfers all incoming packets from connections to the multiplexer
+	globalReadChannel chan any
+	// globalWriteChannel transfers all outgoing packets from applications to the multiplexer
+	globalWriteChannel     chan any
+	wg                     *sync.WaitGroup
+	handshakeTimeout       time.Duration
+	tlsEnabled             bool
+	tlsConfig              *tls.Config
+	multiplexerBufferSize  int
+	multiplexerWorkerCount int
 }
 
 func New(cfg *Config) (*Nodosum, error) {
@@ -45,7 +51,7 @@ func New(cfg *Config) (*Nodosum, error) {
 	if cfg.TlsEnabled {
 		cfg.Logger.Debug("running with TLS enabled")
 		tlsConf = &tls.Config{
-			ServerName:   "localhost",
+			ServerName:   cfg.TlsHostName,
 			RootCAs:      cfg.TlsCACert,
 			Certificates: []tls.Certificate{*cfg.TlsCert},
 		}
@@ -56,19 +62,26 @@ func New(cfg *Config) (*Nodosum, error) {
 	}
 
 	return &Nodosum{
-		nodeId:           cfg.NodeId,
-		ctx:              cfg.Ctx,
-		listener:         listener,
-		logger:           cfg.Logger,
-		connections:      &sync.Map{},
-		wg:               cfg.Wg,
-		handshakeTimeout: cfg.HandshakeTimeout,
-		tlsEnabled:       cfg.TlsEnabled,
-		tlsConfig:        tlsConf,
+		nodeId:                 cfg.NodeId,
+		ctx:                    cfg.Ctx,
+		listener:               listener,
+		logger:                 cfg.Logger,
+		connections:            &sync.Map{},
+		globalReadChannel:      make(chan any, cfg.MultiplexerBufferSize),
+		globalWriteChannel:     make(chan any, cfg.MultiplexerBufferSize),
+		wg:                     cfg.Wg,
+		handshakeTimeout:       cfg.HandshakeTimeout,
+		tlsEnabled:             cfg.TlsEnabled,
+		tlsConfig:              tlsConf,
+		multiplexerBufferSize:  cfg.MultiplexerBufferSize,
+		multiplexerWorkerCount: cfg.MultiplexerWorkerCount,
 	}, nil
 }
 
 func (n *Nodosum) Start() {
+
+	n.StartMultiplexer()
+
 	n.wg.Go(
 		func() {
 			err := n.listen()

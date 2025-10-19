@@ -66,10 +66,13 @@ type Config struct {
 
 		Default: 2 seconds
 	*/
-	HandshakeTimeout  time.Duration
-	ClusterTLSEnabled bool
-	ClusterTLSCACert  *x509.CertPool
-	ClusterTLSCert    *tls.Certificate
+	HandshakeTimeout       time.Duration
+	ClusterTLSEnabled      bool
+	ClusterTLSHostName     string
+	ClusterTLSCACert       *x509.CertPool
+	ClusterTLSCert         *tls.Certificate
+	MultiplexerBufferSize  int
+	MultiplexerWorkerCount int
 }
 
 func GetDefaultConfig() *Config {
@@ -79,10 +82,12 @@ func GetDefaultConfig() *Config {
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
 		})),
-		DiscoveryMode:    DC_MODE_STATIC,
-		SingleMode:       false,
-		ListenPort:       6969,
-		NodeAddrs:        []net.TCPAddr{},
-		HandshakeTimeout: 2 * time.Second,
+		DiscoveryMode:          DC_MODE_STATIC,
+		SingleMode:             false,
+		ListenPort:             6969,
+		NodeAddrs:              []net.TCPAddr{},
+		HandshakeTimeout:       2 * time.Second,
+		MultiplexerBufferSize:  1024,
+		MultiplexerWorkerCount: 1,
 	}
 }

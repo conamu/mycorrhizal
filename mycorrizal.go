@@ -91,15 +91,18 @@ func New(cfg *Config) (Mycorrizal, error) {
 	wg := &sync.WaitGroup{}
 
 	nodosumConfig := &nodosum.Config{
-		NodeId:           id,
-		Ctx:              ctx,
-		ListenPort:       cfg.ListenPort,
-		Logger:           cfg.Logger,
-		Wg:               wg,
-		HandshakeTimeout: cfg.HandshakeTimeout,
-		TlsEnabled:       cfg.ClusterTLSEnabled,
-		TlsCACert:        cfg.ClusterTLSCACert,
-		TlsCert:          cfg.ClusterTLSCert,
+		NodeId:                 id,
+		Ctx:                    ctx,
+		ListenPort:             cfg.ListenPort,
+		Logger:                 cfg.Logger,
+		Wg:                     wg,
+		HandshakeTimeout:       cfg.HandshakeTimeout,
+		TlsEnabled:             cfg.ClusterTLSEnabled,
+		TlsHostName:            cfg.ClusterTLSHostName,
+		TlsCACert:              cfg.ClusterTLSCACert,
+		TlsCert:                cfg.ClusterTLSCert,
+		MultiplexerBufferSize:  cfg.MultiplexerBufferSize,
+		MultiplexerWorkerCount: cfg.MultiplexerWorkerCount,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)
@@ -132,9 +135,9 @@ func (mc *mycorrizal) Start() error {
 
 func (mc *mycorrizal) Shutdown() error {
 	mc.logger.Info("mycorrizal shutting down")
+	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
 	mc.cancel()
 	mc.nodosum.Shutdown()
-	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
 	mc.wg.Wait()
 	mc.logger.Info("mycorrizal shutdown complete")
 	return nil

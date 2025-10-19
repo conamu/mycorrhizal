@@ -184,7 +184,7 @@ func (n *Nodosum) writeLoop(id string) {
 			if msg == nil {
 				continue
 			}
-			_, err := connChan.conn.Write(msg)
+			_, err := connChan.conn.Write(msg.([]byte))
 			if err != nil {
 				n.logger.Error("error writing to tcp connection", "error", err.Error())
 			}

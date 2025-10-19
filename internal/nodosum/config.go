@@ -10,13 +10,16 @@ import (
 )
 
 type Config struct {
-	NodeId           string
-	Ctx              context.Context
-	ListenPort       int
-	HandshakeTimeout time.Duration
-	Logger           *slog.Logger
-	Wg               *sync.WaitGroup
-	TlsEnabled       bool
-	TlsCACert        *x509.CertPool
-	TlsCert          *tls.Certificate
+	NodeId                 string
+	Ctx                    context.Context
+	ListenPort             int
+	HandshakeTimeout       time.Duration
+	Logger                 *slog.Logger
+	Wg                     *sync.WaitGroup
+	TlsEnabled             bool
+	TlsHostName            string
+	TlsCACert              *x509.CertPool
+	TlsCert                *tls.Certificate
+	MultiplexerBufferSize  int
+	MultiplexerWorkerCount int
 }

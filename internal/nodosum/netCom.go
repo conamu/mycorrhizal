@@ -24,15 +24,17 @@ type Command interface {
 }
 type command struct {
 	id       string
+	senderId string
 	command  int
 	data     []byte
 	aclToken string
 }
 
-func NewCommand(cmd int, data []byte, token string) Command {
+func (n *Nodosum) NewCommand(cmd int, data []byte, token string) Command {
 	id := uuid.NewString()
 	return &command{
 		id:       id,
+		senderId: n.nodeId,
 		command:  cmd,
 		data:     data,
 		aclToken: token,

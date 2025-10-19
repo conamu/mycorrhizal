@@ -43,6 +43,7 @@ type application struct {
 }
 
 func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
+
 	sendWorker := worker.NewWorker(n.ctx, uniqueIdentifier+"send", n.wg, n.applicationSendTask, n.logger, 0)
 	sendWorker.Start()
 
@@ -81,5 +82,4 @@ func (n *Nodosum) applicationSendTask(w *worker.Worker, msg any) {
 }
 
 func (n *Nodosum) applicationReceiveTask(w *worker.Worker, msg any) {
-
 }

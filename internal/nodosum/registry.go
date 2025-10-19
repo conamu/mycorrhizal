@@ -12,8 +12,8 @@ type nodeConn struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	conn      net.Conn
-	readChan  chan []byte
-	writeChan chan []byte
+	readChan  chan any
+	writeChan chan any
 }
 
 func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
@@ -25,8 +25,8 @@ func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 		conn:      conn,
 		ctx:       ctx,
 		cancel:    cancel,
-		readChan:  make(chan []byte),
-		writeChan: make(chan []byte),
+		readChan:  n.globalReadChannel,
+		writeChan: make(chan any),
 	})
 }
 
