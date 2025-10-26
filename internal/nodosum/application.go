@@ -1,6 +1,8 @@
 package nodosum
 
 import (
+	"fmt"
+
 	"github.com/conamu/go-worker"
 )
 
@@ -26,56 +28,61 @@ Packets for one application are always Identified by its Identifier and routed t
 
 type Application interface {
 	// Send sends a Command to one or more Nodes specified by ID. Specifying no ID will broadcast the packet to all Nodes.
-	Send(cmd Command, ids []string) error
+	Send(payload []byte, ids []string) error
 	// SetReceiveFunc registers a function that is executed to handle the Command received.
-	SetReceiveFunc(func(cmd Command) error)
+	SetReceiveFunc(func(payload []byte) error)
 	// Nodes retrieves the ID info about nodes in the cluster to enable the application to work with the clusters resources.
 	Nodes() []string
-	Deregister()
 }
 
 type application struct {
-	id            string
-	receiveFunc   func(cmd Command) error
+	id            uint32
+	receiveFunc   func(payload []byte) error
 	nodes         []string
 	sendWorker    *worker.Worker
 	receiveWorker *worker.Worker
 }
 
-func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
+type dataPackage struct {
+	id             uint32
+	payload        []byte
+	receivingNodes []string
+}
 
-	sendWorker := worker.NewWorker(n.ctx, uniqueIdentifier+"send", n.wg, n.applicationSendTask, n.logger, 0)
+func (n *Nodosum) RegisterApplication(uniqueIdentifier uint32) Application {
+
+	sendWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%d-send", uniqueIdentifier), n.wg, n.applicationSendTask, n.logger, 0)
+	sendWorker.OutputChan = n.globalWriteChannel
 	sendWorker.Start()
 
-	receiveWorker := worker.NewWorker(n.ctx, uniqueIdentifier+"receive", n.wg, n.applicationReceiveTask, n.logger, 0)
+	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%d-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
+	receiveWorker.InputChan = make(chan any)
 	receiveWorker.Start()
 
-	//TODO: Find a way to keep nodes in sync for the application instances
-
-	return &application{
+	app := application{
 		id:            uniqueIdentifier,
 		sendWorker:    sendWorker,
 		receiveWorker: receiveWorker,
 	}
+
+	n.applications.Store(uniqueIdentifier, app)
+
+	//TODO: Find a way to keep nodes in sync for the application instances
+
+	return &app
 }
 
-func (a *application) Send(cmd Command, ids []string) error {
+func (a *application) Send(payload []byte, ids []string) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (a *application) SetReceiveFunc(f func(cmd Command) error) {
+func (a *application) SetReceiveFunc(f func(payload []byte) error) {
 	a.receiveFunc = f
 }
 
 func (a *application) Nodes() []string {
 	return a.nodes
-}
-
-func (a *application) Deregister() {
-	// TODO Broadcast deregister message on demand
-	a.receiveWorker.Stop()
-	a.sendWorker.Stop()
 }
 
 func (n *Nodosum) applicationSendTask(w *worker.Worker, msg any) {

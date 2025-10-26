@@ -13,6 +13,7 @@ type Config struct {
 	NodeId                 string
 	Ctx                    context.Context
 	ListenPort             int
+	UdpListenPort          int
 	HandshakeTimeout       time.Duration
 	Logger                 *slog.Logger
 	Wg                     *sync.WaitGroup
@@ -20,6 +21,7 @@ type Config struct {
 	TlsHostName            string
 	TlsCACert              *x509.CertPool
 	TlsCert                *tls.Certificate
+	SharedSecret           string
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 }

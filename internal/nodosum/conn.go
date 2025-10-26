@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -80,13 +81,11 @@ func (n *Nodosum) handleConn(conn net.Conn) {
 	go n.startRwLoops(nodeConnId)
 }
 
-func (n *Nodosum) startRwLoops(id string) {
+func (n *Nodosum) startRwLoops(id uint32) {
 	defer n.wg.Done()
 	n.wg.Add(2)
 
-	// Write Loop
 	go n.writeLoop(id)
-	// Read Loop
 	go n.readLoop(id)
 }
 
@@ -134,7 +133,7 @@ func (n *Nodosum) serverHandshake(conn net.Conn) string {
 	return string(pack.Data)
 }
 
-func (n *Nodosum) readLoop(id string) {
+func (n *Nodosum) readLoop(id uint32) {
 	defer n.wg.Done()
 
 	v, ok := n.connections.Load(id)
@@ -146,27 +145,44 @@ func (n *Nodosum) readLoop(id string) {
 	for {
 		select {
 		case <-connChan.ctx.Done():
-			n.logger.Debug("read loop for " + id + " cancelled")
+			n.logger.Debug(fmt.Sprintf("read loop for %d cancelled", id))
 			return
 		default:
-			buff := make([]byte, 4096)
-			i, err := connChan.conn.Read(buff)
-			if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) {
-				n.logger.Debug("closing conn because of closed connection or deadline exceeded")
-				n.closeConnChannel(id)
-				continue
-			}
+			// Receive and decode frame header
+			headerBytes := make([]byte, 11)
+			i, err := io.ReadFull(connChan.conn, headerBytes)
 			if err != nil {
-				n.logger.Error("error reading from tcp connection", "error", err.Error())
+				n.handleConnError(err, id)
 				continue
 			}
-			msg := string(buff[:i])
-			connChan.readChan <- []byte(msg)
+			if i != 11 {
+				n.handleConnError(fmt.Errorf("invalid frame header length %d", i), id)
+				continue
+			}
+
+			header := decodeFrameHeader(headerBytes)
+			payloadLength := header.Length
+			payloadBytes := make([]byte, payloadLength)
+
+			// Read Payload
+			i, err = io.ReadFull(connChan.conn, payloadBytes)
+			if err != nil {
+				n.handleConnError(err, id)
+				continue
+			}
+			if i != int(header.Length) {
+				n.handleConnError(fmt.Errorf("invalid frame payload length %d", i), id)
+				continue
+			}
+
+			frameBytes := append(headerBytes, payloadBytes...)
+
+			connChan.readChan <- frameBytes
 		}
 	}
 }
 
-func (n *Nodosum) writeLoop(id string) {
+func (n *Nodosum) writeLoop(id uint32) {
 	defer n.wg.Done()
 
 	v, ok := n.connections.Load(id)
@@ -178,16 +194,27 @@ func (n *Nodosum) writeLoop(id string) {
 	for {
 		select {
 		case <-connChan.ctx.Done():
-			n.logger.Debug("write loop for " + id + " cancelled")
+			n.logger.Debug(fmt.Sprintf("write loop for %d cancelled", id))
 			return
 		case msg := <-connChan.writeChan:
 			if msg == nil {
 				continue
 			}
-			_, err := connChan.conn.Write(msg.([]byte))
+
+			_, err := connChan.conn.Write(append(msg.([]byte)))
 			if err != nil {
 				n.logger.Error("error writing to tcp connection", "error", err.Error())
 			}
 		}
+	}
+}
+
+func (n *Nodosum) handleConnError(err error, chanId uint32) {
+	if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.ErrUnexpectedEOF) {
+		n.logger.Debug("closing conn because of closed connection or deadline exceeded")
+		n.closeConnChannel(chanId)
+	}
+	if err != nil {
+		n.logger.Error("error reading from tcp connection", "error", err.Error())
 	}
 }

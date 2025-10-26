@@ -3,11 +3,12 @@ package nodosum
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 )
 
 type nodeConn struct {
-	connId    string
+	connId    uint32
 	addr      net.Addr
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -16,7 +17,7 @@ type nodeConn struct {
 	writeChan chan any
 }
 
-func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
+func (n *Nodosum) createConnChannel(id uint32, conn net.Conn) {
 	ctx, cancel := context.WithCancel(n.ctx)
 
 	n.connections.Store(id, &nodeConn{
@@ -30,8 +31,8 @@ func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 	})
 }
 
-func (n *Nodosum) closeConnChannel(id string) {
-	n.logger.Debug("closing connection channel for " + id)
+func (n *Nodosum) closeConnChannel(id uint32) {
+	n.logger.Debug(fmt.Sprintf("closing connection channel for %d", id))
 	c, ok := n.connections.Load(id)
 	if ok {
 		conn := c.(*nodeConn)
