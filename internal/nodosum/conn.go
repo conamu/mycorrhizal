@@ -13,15 +13,46 @@ import (
 
 // TODO: Introduce UDP for connection negotiation
 
-func (n *Nodosum) listen() error {
+func (n *Nodosum) listenUdp() {
 	n.wg.Go(
 		func() {
 			<-n.ctx.Done()
-			err := n.listener.Close()
+			err := n.udpConn.Close()
 			if err != nil {
-				n.logger.Info("listener close failed", "error", err.Error())
+				n.logger.Info("udpConn close failed", "error", err.Error())
 			}
-			n.logger.Info("listener closed")
+			n.logger.Info("listenerTcp closed")
+		},
+	)
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+			buf := make([]byte, 1024)
+			bytesRead, addr, err := n.udpConn.ReadFromUDP(buf)
+			if err != nil {
+				n.logger.Info("udp read failed", "error", err.Error(), "bytesRead", bytesRead, "addr", addr)
+			}
+
+			go n.handleUdp(buf[:bytesRead])
+		}
+	}
+
+}
+
+func (n *Nodosum) handleUdp(bytes []byte) {}
+
+func (n *Nodosum) listenTcp() {
+	n.wg.Go(
+		func() {
+			<-n.ctx.Done()
+			err := n.listenerTcp.Close()
+			if err != nil {
+				n.logger.Info("listenerTcp close failed", "error", err.Error())
+			}
+			n.logger.Info("listenerTcp closed")
 		},
 	)
 
@@ -29,9 +60,9 @@ func (n *Nodosum) listen() error {
 	for {
 		select {
 		case <-n.ctx.Done():
-			return nil
+			return
 		default:
-			conn, err := n.listener.Accept()
+			conn, err := n.listenerTcp.Accept()
 			if err != nil {
 				if !errors.Is(err, net.ErrClosed) {
 					n.logger.Error("error accepting TCP connection", err.Error())
@@ -89,48 +120,8 @@ func (n *Nodosum) startRwLoops(id uint32) {
 	go n.readLoop(id)
 }
 
-func (n *Nodosum) serverHandshake(conn net.Conn) string {
-	p, err := pack("HANDSHAKE", HELLO, []byte(n.nodeId), "")
-	if err != nil {
-		// Return here since unsuccessful HELLO packet won´t get us a connection any ways
-		n.logger.Error("error packing packet", "error", err.Error())
-		return ""
-	}
-
-	numWrittenBytes, err := conn.Write(p)
-	if err != nil {
-		n.logger.Error("error sending node id to tcp connection", err.Error())
-	}
-	if numWrittenBytes != len(p) {
-		n.logger.Warn("packet contains more bytes than written to connection")
-	}
-	buff := make([]byte, 40690000)
-	// Set a deadline in which a client needs to answer, else cut the connection assuming he don´t speak our language
-	err = conn.SetReadDeadline(time.Now().Add(n.handshakeTimeout))
-	if err != nil {
-		n.logger.Error("error setting read deadline", err.Error())
-	}
-	numReadBytes, err := conn.Read(buff)
-	if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-		conn.Close()
-		return ""
-	}
-	if err != nil {
-		n.logger.Error("error reading node id from tcp connection", "error", err.Error())
-	}
-
-	pack, err := unpack(buff[:numReadBytes])
-	if err != nil {
-		conn.Close()
-		n.logger.Error("error unpacking glutamate packet", "error", err.Error(), "nBytes", numReadBytes, "remote", conn.RemoteAddr())
-		return ""
-	}
-
-	if pack.Command != HELLO {
-		conn.Close()
-		n.logger.Warn("client did not answer correctly with HELLO", "remote", conn.RemoteAddr())
-	}
-	return string(pack.Data)
+func (n *Nodosum) serverHandshake(conn net.Conn) uint32 {
+	return 0
 }
 
 func (n *Nodosum) readLoop(id uint32) {

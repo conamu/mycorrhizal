@@ -1,9 +1,7 @@
 package nodosum
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
-	"errors"
 )
 
 /*
@@ -50,7 +48,7 @@ type frameHeader struct {
 }
 
 func encodeFrameHeader(fh *frameHeader) []byte {
-	buf := make([]byte, 11)
+	buf := make([]byte, 12)
 
 	buf[0] = fh.Version
 	binary.LittleEndian.PutUint32(buf[1:], fh.ApplicationID)
@@ -72,3 +70,51 @@ func decodeFrameHeader(frameHeaderBytes []byte) *frameHeader {
 
 	return &fh
 }
+
+/*
+	UDP handshake protocol
+	1. Node ID exchange
+	2. Secret verification
+	3. A random conn init value is exchanged to decide who initiates connection
+	4. The connection receiver sends a temporary one-time use key to establish
+		a verified tcp connection after the handshake
+*/
+
+func encodeHandshakePacket(hp *handshakeUdpPacket) []byte {
+	buf := make([]byte, 11)
+
+	buf[0] = hp.Version
+	buf[1] = uint8(hp.Type)
+	buf[2] = hp.ConnInit
+	binary.LittleEndian.PutUint32(buf[3:], hp.Id)
+	binary.LittleEndian.PutUint32(buf[7:], hp.Secret)
+
+	return buf
+}
+
+func decodeHandshakePacket(bytes []byte) *handshakeUdpPacket {
+	hp := handshakeUdpPacket{}
+
+	hp.Version = bytes[0]
+	hp.Type = handshakeMessage(bytes[1])
+	hp.ConnInit = bytes[2]
+	hp.Id = binary.LittleEndian.Uint32(bytes[3:6])
+	hp.Secret = binary.LittleEndian.Uint32(bytes[7:10])
+
+	return &hp
+}
+
+type handshakeUdpPacket struct {
+	Version  uint8
+	Type     handshakeMessage
+	ConnInit uint8
+	Id       uint32
+	Secret   uint32
+}
+
+type handshakeMessage uint8
+
+const (
+	HELLO handshakeMessage = iota
+	HELLO_ACK
+)

@@ -27,7 +27,9 @@ SCOPE
 type Nodosum struct {
 	nodeId       string
 	ctx          context.Context
-	listener     net.Listener
+	listenerTcp  net.Listener
+	udpConn      *net.UDPConn
+	sharedSecret string
 	logger       *slog.Logger
 	connections  *sync.Map
 	applications *sync.Map
@@ -46,8 +48,8 @@ type Nodosum struct {
 func New(cfg *Config) (*Nodosum, error) {
 	var tlsConf *tls.Config
 
-	lAddr := &net.TCPAddr{Port: cfg.ListenPort}
-	addrString := lAddr.String()
+	tcpLocalAddr := &net.TCPAddr{Port: cfg.ListenPort}
+	addrString := tcpLocalAddr.String()
 
 	if cfg.TlsEnabled {
 		cfg.Logger.Debug("running with TLS enabled")
@@ -57,15 +59,20 @@ func New(cfg *Config) (*Nodosum, error) {
 			Certificates: []tls.Certificate{*cfg.TlsCert},
 		}
 	}
-	listener, err := net.Listen("tcp", addrString)
+	listenerTcp, err := net.Listen("tcp", addrString)
 	if err != nil {
 		return nil, err
 	}
 
+	udpLocalAddr := &net.UDPAddr{Port: cfg.ListenPort}
+	listenerUdp, err := net.ListenUDP("udp", udpLocalAddr)
+
 	return &Nodosum{
 		nodeId:                cfg.NodeId,
 		ctx:                   cfg.Ctx,
-		listener:              listener,
+		listenerTcp:           listenerTcp,
+		udpConn:               listenerUdp,
+		sharedSecret:          cfg.SharedSecret,
 		logger:                cfg.Logger,
 		connections:           &sync.Map{},
 		applications:          &sync.Map{},
@@ -86,10 +93,12 @@ func (n *Nodosum) Start() {
 
 	n.wg.Go(
 		func() {
-			err := n.listen()
-			if err != nil {
-				n.logger.Error("nodosum error while starting", "error", err.Error())
-			}
+			n.listenTcp()
+		},
+	)
+	n.wg.Go(
+		func() {
+			n.listenUdp()
 		},
 	)
 }

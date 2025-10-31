@@ -1,6 +1,2 @@
-github.com/conamu/go-worker v0.0.0-20250929233913-1ff4ec154b65 h1:sRNYDO8yOW7M4Rdrbe5Z4K884V68EQVFhhIFVbakqGA=
-github.com/conamu/go-worker v0.0.0-20250929233913-1ff4ec154b65/go.mod h1:i2S3vRpemKS/KCf6k05JR1dZAaLtB8Xwh0SIsxsWHzs=
-github.com/google/flatbuffers v25.9.23+incompatible h1:rGZKv+wOb6QPzIdkM2KxhBZCDrA0DeN6DNmRDrqIsQU=
-github.com/google/flatbuffers v25.9.23+incompatible/go.mod h1:1AeVuKshWv4vARoZatz6mlQ0JxURH0Kv5+zNeJKJCa8=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=

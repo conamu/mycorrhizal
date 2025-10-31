@@ -59,8 +59,9 @@ type Config struct {
 		SingleMode disables all Cluster features but leaves the listener enabled for the CLI.
 		A node in SingleMode will reject all connections besides ones identified as an Authenticated CLI instance.
 	*/
-	SingleMode bool
-	ListenPort int
+	SingleMode   bool
+	ListenPort   int
+	SharedSecret string
 	/*
 		HandshakeTimeout defines the duration in which a client has to answer before conn is dropped.
 
