@@ -3,7 +3,9 @@ package nodosum
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log/slog"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -27,6 +29,7 @@ SCOPE
 type Nodosum struct {
 	nodeId       string
 	ctx          context.Context
+	connInit     *connInit
 	listenerTcp  net.Listener
 	udpConn      *net.UDPConn
 	sharedSecret string
@@ -43,6 +46,12 @@ type Nodosum struct {
 	tlsConfig             *tls.Config
 	multiplexerBufferSize int
 	muxWorkerCount        int
+}
+
+type connInit struct {
+	mu     sync.Mutex
+	val    uint32
+	tokens map[string]string
 }
 
 func New(cfg *Config) (*Nodosum, error) {
@@ -65,13 +74,18 @@ func New(cfg *Config) (*Nodosum, error) {
 	}
 
 	udpLocalAddr := &net.UDPAddr{Port: cfg.ListenPort}
-	listenerUdp, err := net.ListenUDP("udp", udpLocalAddr)
+	udpConn, err := net.ListenUDP("udp", udpLocalAddr)
 
 	return &Nodosum{
-		nodeId:                cfg.NodeId,
-		ctx:                   cfg.Ctx,
+		nodeId: cfg.NodeId,
+		ctx:    cfg.Ctx,
+		connInit: &connInit{
+			mu:     sync.Mutex{},
+			val:    rand.Uint32(),
+			tokens: make(map[string]string),
+		},
 		listenerTcp:           listenerTcp,
-		udpConn:               listenerUdp,
+		udpConn:               udpConn,
 		sharedSecret:          cfg.SharedSecret,
 		logger:                cfg.Logger,
 		connections:           &sync.Map{},
@@ -87,7 +101,13 @@ func New(cfg *Config) (*Nodosum, error) {
 	}, nil
 }
 
-func (n *Nodosum) Start() {
+func (n *Nodosum) Start() error {
+
+	x := len([]byte(n.sharedSecret))
+
+	if x != 64 {
+		return errors.New("invalid shared secret, must be 64 bytes")
+	}
 
 	n.StartMultiplexer()
 
@@ -101,11 +121,12 @@ func (n *Nodosum) Start() {
 			n.listenUdp()
 		},
 	)
+	return nil
 }
 
 func (n *Nodosum) Shutdown() {
 	n.connections.Range(func(k, v interface{}) bool {
-		id := k.(uint32)
+		id := k.(string)
 		n.closeConnChannel(id)
 		return true
 	})

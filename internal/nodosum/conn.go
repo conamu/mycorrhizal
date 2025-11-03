@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// TODO: Introduce UDP for connection negotiation
-
 func (n *Nodosum) listenUdp() {
 	n.wg.Go(
 		func() {
@@ -32,17 +30,49 @@ func (n *Nodosum) listenUdp() {
 		default:
 			buf := make([]byte, 1024)
 			bytesRead, addr, err := n.udpConn.ReadFromUDP(buf)
-			if err != nil {
-				n.logger.Info("udp read failed", "error", err.Error(), "bytesRead", bytesRead, "addr", addr)
-			}
-
-			go n.handleUdp(buf[:bytesRead])
+			go n.handleUdp(buf, bytesRead, addr, err)
 		}
 	}
 
 }
 
-func (n *Nodosum) handleUdp(bytes []byte) {}
+// handleUdp will decode the packet received and based on the defined udp handshake
+// it will enable creation of a permanent tcp connection
+func (n *Nodosum) handleUdp(buf []byte, bytesRead int, addr *net.UDPAddr, err error) {
+
+	err = n.handleUdpError(err)
+	if err != nil {
+		n.logger.Error("udp read failed", "error", err.Error(), "bytesRead", bytesRead, "addr", addr)
+	}
+
+	hp := n.decodeHandshakePacket(buf)
+
+	if hp == nil {
+		return
+	}
+
+	if hp.Version == 0 {
+		n.logger.Debug("version is 0")
+		return
+	}
+
+	if hp.Secret != n.sharedSecret {
+		n.logger.Warn("tried to initiate udp handshake with invalid secret")
+		return
+	}
+
+	responsePacket := n.handleUdpPacket(hp, addr.String())
+
+	responsePacketBytes := n.encodeHandshakePacket(responsePacket)
+
+	i, err := n.udpConn.WriteToUDP(responsePacketBytes, addr)
+	if err != nil {
+		n.logger.Info("write udp response failed", "error", err.Error())
+	}
+	if i != len(responsePacketBytes) {
+		n.logger.Warn("write udp response byte count not matching")
+	}
+}
 
 func (n *Nodosum) listenTcp() {
 	n.wg.Go(
@@ -112,7 +142,13 @@ func (n *Nodosum) handleConn(conn net.Conn) {
 	go n.startRwLoops(nodeConnId)
 }
 
-func (n *Nodosum) startRwLoops(id uint32) {
+// serverHandshake will be called to redeem a one-time connection token
+// that the server received from the udp based handshake
+func (n *Nodosum) serverHandshake(conn net.Conn) string {
+	return ""
+}
+
+func (n *Nodosum) startRwLoops(id string) {
 	defer n.wg.Done()
 	n.wg.Add(2)
 
@@ -120,11 +156,7 @@ func (n *Nodosum) startRwLoops(id uint32) {
 	go n.readLoop(id)
 }
 
-func (n *Nodosum) serverHandshake(conn net.Conn) uint32 {
-	return 0
-}
-
-func (n *Nodosum) readLoop(id uint32) {
+func (n *Nodosum) readLoop(id string) {
 	defer n.wg.Done()
 
 	v, ok := n.connections.Load(id)
@@ -173,7 +205,7 @@ func (n *Nodosum) readLoop(id uint32) {
 	}
 }
 
-func (n *Nodosum) writeLoop(id uint32) {
+func (n *Nodosum) writeLoop(id string) {
 	defer n.wg.Done()
 
 	v, ok := n.connections.Load(id)
@@ -200,7 +232,7 @@ func (n *Nodosum) writeLoop(id uint32) {
 	}
 }
 
-func (n *Nodosum) handleConnError(err error, chanId uint32) {
+func (n *Nodosum) handleConnError(err error, chanId string) {
 	if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.ErrUnexpectedEOF) {
 		n.logger.Debug("closing conn because of closed connection or deadline exceeded")
 		n.closeConnChannel(chanId)
@@ -208,4 +240,11 @@ func (n *Nodosum) handleConnError(err error, chanId uint32) {
 	if err != nil {
 		n.logger.Error("error reading from tcp connection", "error", err.Error())
 	}
+}
+
+func (n *Nodosum) handleUdpError(err error) error {
+	if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil
+	}
+	return err
 }
