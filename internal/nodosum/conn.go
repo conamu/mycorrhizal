@@ -145,7 +145,48 @@ func (n *Nodosum) handleConn(conn net.Conn) {
 // serverHandshake will be called to redeem a one-time connection token
 // that the server received from the udp based handshake
 func (n *Nodosum) serverHandshake(conn net.Conn) string {
-	return ""
+
+	connInitFrameHeader := encodeFrameHeader(&frameHeader{
+		Version:       1,
+		ApplicationID: n.nodeId,
+		Type:          SYSTEM,
+		Flag:          CONN_INIT,
+		Length:        0,
+	})
+
+	i, err := conn.Write(connInitFrameHeader)
+	if err != nil {
+		n.logger.Error("error sending conn init frame header", "error", err.Error())
+	}
+	if i != len(connInitFrameHeader) {
+		n.logger.Warn("error sending conn init frame header", "error", fmt.Sprintf("expected: %d, actual: %d", i, len(connInitFrameHeader)))
+	}
+
+	err = conn.SetReadDeadline(time.Now().Add(n.handshakeTimeout))
+	if err != nil {
+		n.logger.Error("error setting read deadline", err.Error())
+	}
+
+	readBuf := make([]byte, 1024)
+
+	i, err = conn.Read(readBuf)
+	if err != nil {
+		n.logger.Error("error reading conn init frame header", "error", err.Error())
+	}
+
+	fh := decodeFrameHeader(readBuf[:i])
+
+	readBuf = make([]byte, fh.Length)
+	i, err = conn.Read(readBuf)
+	if err != nil {
+		n.logger.Error("error reading conn init token frame header", "error", err.Error())
+	}
+
+	if n.connInit.tokens[fh.ApplicationID] != string(readBuf) {
+		n.logger.Warn("tcp handshake secret token challenge not accepted", "token", string(readBuf))
+	}
+
+	return fh.ApplicationID
 }
 
 func (n *Nodosum) startRwLoops(id string) {
