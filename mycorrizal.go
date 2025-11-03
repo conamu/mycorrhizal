@@ -27,7 +27,6 @@ type mycorrizal struct {
 	cancel        context.CancelFunc
 	logger        *slog.Logger
 	httpClient    *http.Client
-	connReg       *connectionRegistry
 	discoveryMode int
 	nodeAddrs     []net.TCPAddr
 	singleMode    bool
@@ -97,6 +96,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		Logger:                 cfg.Logger,
 		Wg:                     wg,
 		HandshakeTimeout:       cfg.HandshakeTimeout,
+		SharedSecret:           cfg.SharedSecret,
 		TlsEnabled:             cfg.ClusterTLSEnabled,
 		TlsHostName:            cfg.ClusterTLSHostName,
 		TlsCACert:              cfg.ClusterTLSCACert,
@@ -118,7 +118,6 @@ func New(cfg *Config) (Mycorrizal, error) {
 		cancel:        cancel,
 		logger:        cfg.Logger,
 		httpClient:    httpClient,
-		connReg:       newConnectionRegistry(),
 		discoveryMode: cfg.DiscoveryMode,
 		nodeAddrs:     cfg.NodeAddrs,
 		singleMode:    cfg.SingleMode,
@@ -128,7 +127,12 @@ func New(cfg *Config) (Mycorrizal, error) {
 
 func (mc *mycorrizal) Start() error {
 	mc.logger.Info("mycorrizal starting")
-	mc.nodosum.Start()
+	err := mc.nodosum.Start()
+	if err != nil {
+		mc.logger.Error(err.Error())
+		mc.cancel()
+		return err
+	}
 	mc.logger.Info("mycorrizal startup complete")
 	return nil
 }
@@ -141,19 +145,4 @@ func (mc *mycorrizal) Shutdown() error {
 	mc.wg.Wait()
 	mc.logger.Info("mycorrizal shutdown complete")
 	return nil
-}
-
-// connectionRegistry is needed to keep track of connections and merge connections for efficiency
-type connectionRegistry struct {
-	mu       sync.Mutex
-	outbound map[string]*net.TCPConn
-	inbound  map[string]*net.TCPConn
-}
-
-func newConnectionRegistry() *connectionRegistry {
-	return &connectionRegistry{
-		mu:       sync.Mutex{},
-		outbound: make(map[string]*net.TCPConn),
-		inbound:  make(map[string]*net.TCPConn),
-	}
 }

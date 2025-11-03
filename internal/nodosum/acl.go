@@ -9,22 +9,13 @@ ex.: CACHE:USER:READ
 */
 
 var godToken = token{
-	token: "token",
-	commands: map[int]bool{
-		EXIT:  true,
-		HELLO: true,
-		ID:    true,
-		SET:   true,
-	},
+	token:    "token",
+	commands: map[int]bool{},
 }
 
 var anonymousToken = token{
-	token: "",
-	commands: map[int]bool{
-		EXIT:  true,
-		HELLO: true,
-		GET:   true,
-	},
+	token:    "",
+	commands: map[int]bool{},
 }
 
 type token struct {

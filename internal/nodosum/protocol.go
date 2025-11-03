@@ -1,7 +1,10 @@
 package nodosum
 
 import (
+	"crypto/rand"
+	"crypto/tls"
 	"encoding/binary"
+	"net"
 )
 
 /*
@@ -32,6 +35,7 @@ type messageType uint8
 
 const (
 	COMPRESSED messageFlag = iota
+	CONN_INIT_TOKEN
 )
 
 const (
@@ -41,7 +45,7 @@ const (
 
 type frameHeader struct {
 	Version       uint8
-	ApplicationID uint32      // ID for multiplexer to route to subsystem
+	ApplicationID string      // ID for multiplexer to route to subsystem
 	Type          messageType // message type (e.g. DATA, CONTROL, PING, etc.)
 	Flag          messageFlag // optional flag for behavior
 	Length        uint32      // length of payload following this header
@@ -51,10 +55,10 @@ func encodeFrameHeader(fh *frameHeader) []byte {
 	buf := make([]byte, 12)
 
 	buf[0] = fh.Version
-	binary.LittleEndian.PutUint32(buf[1:], fh.ApplicationID)
-	buf[6] = uint8(fh.Type)
-	buf[7] = uint8(fh.Flag)
-	binary.LittleEndian.PutUint32(buf[8:], fh.Length)
+	buf[1] = uint8(fh.Type)
+	buf[2] = uint8(fh.Flag)
+	binary.LittleEndian.PutUint32(buf[3:], fh.Length)
+	buf = append(buf, []byte(fh.ApplicationID)...)
 
 	return buf
 }
@@ -63,10 +67,10 @@ func decodeFrameHeader(frameHeaderBytes []byte) *frameHeader {
 	fh := frameHeader{}
 
 	fh.Version = frameHeaderBytes[0]
-	fh.ApplicationID = binary.LittleEndian.Uint32(frameHeaderBytes[1:5])
-	fh.Type = messageType(frameHeaderBytes[6])
-	fh.Flag = messageFlag(frameHeaderBytes[7])
-	fh.Length = binary.LittleEndian.Uint32(frameHeaderBytes[8:11])
+	fh.Type = messageType(frameHeaderBytes[1])
+	fh.Flag = messageFlag(frameHeaderBytes[2])
+	fh.Length = binary.LittleEndian.Uint32(frameHeaderBytes[3:7])
+	fh.ApplicationID = string(frameHeaderBytes[7:])
 
 	return &fh
 }
@@ -80,36 +84,107 @@ func decodeFrameHeader(frameHeaderBytes []byte) *frameHeader {
 		a verified tcp connection after the handshake
 */
 
-func encodeHandshakePacket(hp *handshakeUdpPacket) []byte {
-	buf := make([]byte, 11)
+func (n *Nodosum) encodeHandshakePacket(hp *handshakeUdpPacket) []byte {
+	buf := make([]byte, 3)
 
 	buf[0] = hp.Version
 	buf[1] = uint8(hp.Type)
-	buf[2] = hp.ConnInit
-	binary.LittleEndian.PutUint32(buf[3:], hp.Id)
-	binary.LittleEndian.PutUint32(buf[7:], hp.Secret)
+	binary.LittleEndian.PutUint32(buf[2:6], n.connInit.val)
+
+	idBytes := []byte(hp.Id)
+	if len(idBytes) != 16 {
+		return nil
+	}
+
+	secretBytes := []byte(hp.Secret)
+	if len(secretBytes) != 64 {
+		return nil
+	}
+
+	buf = append(buf, idBytes...)
+	buf = append(buf, secretBytes...)
 
 	return buf
 }
 
-func decodeHandshakePacket(bytes []byte) *handshakeUdpPacket {
+func (n *Nodosum) decodeHandshakePacket(bytes []byte) *handshakeUdpPacket {
 	hp := handshakeUdpPacket{}
 
 	hp.Version = bytes[0]
 	hp.Type = handshakeMessage(bytes[1])
-	hp.ConnInit = bytes[2]
-	hp.Id = binary.LittleEndian.Uint32(bytes[3:6])
-	hp.Secret = binary.LittleEndian.Uint32(bytes[7:10])
+	hp.ConnInit = binary.LittleEndian.Uint32(bytes[2:6])
+	hp.Id = string(bytes[3:20])
+	hp.Secret = string(bytes[20:85])
 
 	return &hp
+}
+
+func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshakeUdpPacket {
+	switch hp.Type {
+	case HELLO:
+		return &handshakeUdpPacket{
+			Version:  1,
+			Type:     HELLO_ACK,
+			ConnInit: n.connInit.val,
+			Id:       n.nodeId,
+			Secret:   n.sharedSecret,
+		}
+	case HELLO_ACK:
+		// The node with the lower value will send a connect packet, initializing the tcp connection with an otp token
+
+		if hp.ConnInit < n.connInit.val {
+			secret := make([]byte, 64)
+			_, err := rand.Read(secret)
+			if err != nil {
+				n.logger.Error("failed generating random 64 byte connection secret")
+			}
+			n.connInit.tokens[hp.Id] = string(secret)
+
+			return &handshakeUdpPacket{
+				Version:  1,
+				Type:     HELLO_CONN,
+				ConnInit: n.connInit.val,
+				Id:       n.nodeId,
+				Secret:   string(secret),
+			}
+		}
+		return nil
+	case HELLO_CONN:
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			n.logger.Error("failed connecting to server")
+			return nil
+		}
+
+		if n.tlsEnabled {
+			conn = tls.Client(conn, n.tlsConfig)
+		}
+
+		connectionToken := []byte(hp.Secret)
+
+		bytes := encodeFrameHeader(&frameHeader{
+			Version:       1,
+			ApplicationID: "",
+			Type:          SYSTEM,
+			Flag:          CONN_INIT_TOKEN,
+			Length:        uint32(len(connectionToken)),
+		})
+
+		_, err = conn.Write(bytes)
+		_, err = conn.Write(connectionToken)
+
+		n.createConnChannel(hp.Id, conn)
+		n.startRwLoops(hp.Id)
+	}
+	return nil
 }
 
 type handshakeUdpPacket struct {
 	Version  uint8
 	Type     handshakeMessage
-	ConnInit uint8
-	Id       uint32
-	Secret   uint32
+	ConnInit uint32
+	Id       string
+	Secret   string
 }
 
 type handshakeMessage uint8
@@ -117,4 +192,5 @@ type handshakeMessage uint8
 const (
 	HELLO handshakeMessage = iota
 	HELLO_ACK
+	HELLO_CONN
 )

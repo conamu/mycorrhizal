@@ -6,9 +6,7 @@ import (
 	"github.com/conamu/go-worker"
 )
 
-/* TODO:
-Extract worker library as a module (finally)
-add it here
+/*
 Introduce a configurable amount of workers that do this:
 one type of worker should receive all packets of a connection,
 unpack and send to the different subsystems that should receive them by ID
@@ -36,7 +34,7 @@ type Application interface {
 }
 
 type application struct {
-	id            uint32
+	id            string
 	receiveFunc   func(payload []byte) error
 	nodes         []string
 	sendWorker    *worker.Worker
@@ -44,18 +42,18 @@ type application struct {
 }
 
 type dataPackage struct {
-	id             uint32
+	id             string
 	payload        []byte
 	receivingNodes []string
 }
 
-func (n *Nodosum) RegisterApplication(uniqueIdentifier uint32) Application {
+func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
-	sendWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%d-send", uniqueIdentifier), n.wg, n.applicationSendTask, n.logger, 0)
+	sendWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-send", uniqueIdentifier), n.wg, n.applicationSendTask, n.logger, 0)
 	sendWorker.OutputChan = n.globalWriteChannel
 	sendWorker.Start()
 
-	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%d-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
+	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
 	receiveWorker.InputChan = make(chan any)
 	receiveWorker.Start()
 
