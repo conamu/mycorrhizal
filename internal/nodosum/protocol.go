@@ -36,6 +36,7 @@ type messageType uint8
 const (
 	COMPRESSED messageFlag = iota
 	CONN_INIT_TOKEN
+	CONN_INIT
 )
 
 const (
@@ -122,6 +123,7 @@ func (n *Nodosum) decodeHandshakePacket(bytes []byte) *handshakeUdpPacket {
 func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshakeUdpPacket {
 	switch hp.Type {
 	case HELLO:
+		n.logger.Debug("received hello packet", "remote-id", hp.Id, "id", n.nodeId)
 		return &handshakeUdpPacket{
 			Version:  1,
 			Type:     HELLO_ACK,
@@ -130,6 +132,7 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 			Secret:   n.sharedSecret,
 		}
 	case HELLO_ACK:
+		n.logger.Debug("received hello_ack packet", "remote-id", hp.Id, "id", n.nodeId)
 		// The node with the lower value will send a connect packet, initializing the tcp connection with an otp token
 
 		if hp.ConnInit < n.connInit.val {
@@ -150,6 +153,7 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 		}
 		return nil
 	case HELLO_CONN:
+		n.logger.Debug("received hello_conn packet", "remote-id", hp.Id, "id", n.nodeId)
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
 			n.logger.Error("failed connecting to server")
@@ -160,21 +164,33 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 			conn = tls.Client(conn, n.tlsConfig)
 		}
 
+		n.createConnChannel(hp.Id, conn)
+
 		connectionToken := []byte(hp.Secret)
 
 		bytes := encodeFrameHeader(&frameHeader{
 			Version:       1,
-			ApplicationID: "",
+			ApplicationID: n.nodeId,
 			Type:          SYSTEM,
 			Flag:          CONN_INIT_TOKEN,
 			Length:        uint32(len(connectionToken)),
 		})
 
+		readBuf := make([]byte, 1024)
+		i, err := conn.Read(readBuf)
+		if err != nil {
+			n.handleConnError(err, hp.Id)
+		}
+
+		fh := decodeFrameHeader(readBuf[:i])
+		if fh.Type != SYSTEM || fh.Flag != CONN_INIT {
+			return nil
+		}
+
 		_, err = conn.Write(bytes)
 		_, err = conn.Write(connectionToken)
 
-		n.createConnChannel(hp.Id, conn)
-		n.startRwLoops(hp.Id)
+		n.startRwLoops(fh.ApplicationID)
 	}
 	return nil
 }
