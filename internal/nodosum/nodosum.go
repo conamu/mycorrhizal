@@ -28,6 +28,7 @@ SCOPE
 
 type Nodosum struct {
 	nodeId       string
+	nodeAddrs    *NodeAddrs
 	ctx          context.Context
 	connInit     *connInit
 	listenerTcp  net.Listener
@@ -77,8 +78,9 @@ func New(cfg *Config) (*Nodosum, error) {
 	udpConn, err := net.ListenUDP("udp", udpLocalAddr)
 
 	return &Nodosum{
-		nodeId: cfg.NodeId,
-		ctx:    cfg.Ctx,
+		nodeId:    cfg.NodeId,
+		nodeAddrs: cfg.NodeAddrs,
+		ctx:       cfg.Ctx,
 		connInit: &connInit{
 			mu:     sync.Mutex{},
 			val:    rand.Uint32(),
@@ -121,6 +123,33 @@ func (n *Nodosum) Start() error {
 			n.listenUdp()
 		},
 	)
+
+	time.Sleep(time.Second * 2)
+
+	packet := n.encodeHandshakePacket(&handshakeUdpPacket{
+		Version:  1,
+		Type:     HELLO,
+		ConnInit: n.connInit.val,
+		Id:       n.nodeId,
+		Secret:   n.sharedSecret,
+	})
+
+	n.nodeAddrs.Mu.Lock()
+	for addr, _ := range n.nodeAddrs.IpIdMap {
+
+		a, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			n.logger.Error("failed to resolve udp addr", "err", err)
+			continue
+		}
+
+		_, err = n.udpConn.WriteToUDP(packet, a)
+		if err != nil {
+			n.logger.Error("failed to write udp packet", "err", err)
+		}
+	}
+	n.nodeAddrs.Mu.Unlock()
+
 	return nil
 }
 

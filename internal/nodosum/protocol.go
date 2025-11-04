@@ -1,6 +1,7 @@
 package nodosum
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
@@ -58,7 +59,7 @@ func encodeFrameHeader(fh *frameHeader) []byte {
 	buf[0] = fh.Version
 	buf[1] = uint8(fh.Type)
 	buf[2] = uint8(fh.Flag)
-	binary.LittleEndian.PutUint32(buf[3:], fh.Length)
+	binary.LittleEndian.PutUint32(buf[3:7], fh.Length)
 	buf = append(buf, []byte(fh.ApplicationID)...)
 
 	return buf
@@ -71,7 +72,7 @@ func decodeFrameHeader(frameHeaderBytes []byte) *frameHeader {
 	fh.Type = messageType(frameHeaderBytes[1])
 	fh.Flag = messageFlag(frameHeaderBytes[2])
 	fh.Length = binary.LittleEndian.Uint32(frameHeaderBytes[3:7])
-	fh.ApplicationID = string(frameHeaderBytes[7:])
+	fh.ApplicationID = string(bytes.Trim(frameHeaderBytes[7:], "\x00"))
 
 	return &fh
 }
@@ -85,15 +86,34 @@ func decodeFrameHeader(frameHeaderBytes []byte) *frameHeader {
 		a verified tcp connection after the handshake
 */
 
+type handshakeUdpPacket struct {
+	Version  uint8
+	Type     handshakeMessage
+	ConnInit uint32
+	Id       string
+	Secret   string
+	Token    string
+}
+
+type handshakeMessage uint8
+
+const (
+	HELLO handshakeMessage = iota
+	HELLO_ACK
+	HELLO_CONN
+	PING
+	PONG
+)
+
 func (n *Nodosum) encodeHandshakePacket(hp *handshakeUdpPacket) []byte {
-	buf := make([]byte, 3)
+	buf := make([]byte, 7)
 
 	buf[0] = hp.Version
 	buf[1] = uint8(hp.Type)
 	binary.LittleEndian.PutUint32(buf[2:6], n.connInit.val)
 
 	idBytes := []byte(hp.Id)
-	if len(idBytes) != 16 {
+	if len(idBytes) != 36 {
 		return nil
 	}
 
@@ -102,8 +122,14 @@ func (n *Nodosum) encodeHandshakePacket(hp *handshakeUdpPacket) []byte {
 		return nil
 	}
 
+	tokenBytes := []byte(hp.Token)
+	if len(secretBytes) != 64 {
+		return nil
+	}
+
 	buf = append(buf, idBytes...)
 	buf = append(buf, secretBytes...)
+	buf = append(buf, tokenBytes...)
 
 	return buf
 }
@@ -114,8 +140,9 @@ func (n *Nodosum) decodeHandshakePacket(bytes []byte) *handshakeUdpPacket {
 	hp.Version = bytes[0]
 	hp.Type = handshakeMessage(bytes[1])
 	hp.ConnInit = binary.LittleEndian.Uint32(bytes[2:6])
-	hp.Id = string(bytes[3:20])
-	hp.Secret = string(bytes[20:85])
+	hp.Id = string(bytes[7:43])
+	hp.Secret = string(bytes[43:107])
+	hp.Token = string(bytes[107:171])
 
 	return &hp
 }
@@ -136,19 +163,28 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 		// The node with the lower value will send a connect packet, initializing the tcp connection with an otp token
 
 		if hp.ConnInit < n.connInit.val {
-			secret := make([]byte, 64)
-			_, err := rand.Read(secret)
+			token := make([]byte, 64)
+			_, err := rand.Read(token)
 			if err != nil {
 				n.logger.Error("failed generating random 64 byte connection secret")
 			}
-			n.connInit.tokens[hp.Id] = string(secret)
+			n.connInit.tokens[hp.Id] = string(token)
 
 			return &handshakeUdpPacket{
 				Version:  1,
 				Type:     HELLO_CONN,
 				ConnInit: n.connInit.val,
 				Id:       n.nodeId,
-				Secret:   string(secret),
+				Secret:   n.sharedSecret,
+				Token:    string(token),
+			}
+		} else if hp.ConnInit > n.connInit.val {
+			return &handshakeUdpPacket{
+				Version:  1,
+				Type:     HELLO_ACK,
+				ConnInit: n.connInit.val,
+				Id:       n.nodeId,
+				Secret:   n.sharedSecret,
 			}
 		}
 		return nil
@@ -166,7 +202,7 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 
 		n.createConnChannel(hp.Id, conn)
 
-		connectionToken := []byte(hp.Secret)
+		connectionToken := []byte(hp.Token)
 
 		bytes := encodeFrameHeader(&frameHeader{
 			Version:       1,
@@ -194,19 +230,3 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 	}
 	return nil
 }
-
-type handshakeUdpPacket struct {
-	Version  uint8
-	Type     handshakeMessage
-	ConnInit uint32
-	Id       string
-	Secret   string
-}
-
-type handshakeMessage uint8
-
-const (
-	HELLO handshakeMessage = iota
-	HELLO_ACK
-	HELLO_CONN
-)

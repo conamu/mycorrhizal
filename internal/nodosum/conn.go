@@ -63,7 +63,11 @@ func (n *Nodosum) handleUdp(buf []byte, bytesRead int, addr *net.UDPAddr, err er
 
 	responsePacket := n.handleUdpPacket(hp, addr.String())
 
-	responsePacketBytes := n.encodeHandshakePacket(responsePacket)
+	var responsePacketBytes []byte
+
+	if responsePacket != nil {
+		responsePacketBytes = n.encodeHandshakePacket(responsePacket)
+	}
 
 	i, err := n.udpConn.WriteToUDP(responsePacketBytes, addr)
 	if err != nil {
@@ -174,6 +178,11 @@ func (n *Nodosum) serverHandshake(conn net.Conn) string {
 		n.logger.Error("error reading conn init frame header", "error", err.Error())
 	}
 
+	err = conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		n.logger.Error("error setting read deadline", err.Error())
+	}
+
 	fh := decodeFrameHeader(readBuf[:i])
 
 	readBuf = make([]byte, fh.Length)
@@ -182,9 +191,14 @@ func (n *Nodosum) serverHandshake(conn net.Conn) string {
 		n.logger.Error("error reading conn init token frame header", "error", err.Error())
 	}
 
-	if n.connInit.tokens[fh.ApplicationID] != string(readBuf) {
+	token := n.connInit.tokens[fh.ApplicationID]
+
+	if token != string(readBuf) {
 		n.logger.Warn("tcp handshake secret token challenge not accepted", "token", string(readBuf))
+		return ""
 	}
+	// Remove the token once used
+	delete(n.connInit.tokens, fh.ApplicationID)
 
 	return fh.ApplicationID
 }
@@ -192,6 +206,8 @@ func (n *Nodosum) serverHandshake(conn net.Conn) string {
 func (n *Nodosum) startRwLoops(id string) {
 	defer n.wg.Done()
 	n.wg.Add(2)
+
+	n.logger.Debug("startRwLoops", "id", id)
 
 	go n.writeLoop(id)
 	go n.readLoop(id)
@@ -209,7 +225,7 @@ func (n *Nodosum) readLoop(id string) {
 	for {
 		select {
 		case <-connChan.ctx.Done():
-			n.logger.Debug(fmt.Sprintf("read loop for %d cancelled", id))
+			n.logger.Debug(fmt.Sprintf("read loop for %s cancelled", id))
 			return
 		default:
 			// Receive and decode frame header
@@ -220,7 +236,7 @@ func (n *Nodosum) readLoop(id string) {
 				continue
 			}
 			if i != 11 {
-				n.handleConnError(fmt.Errorf("invalid frame header length %d", i), id)
+				n.handleConnError(fmt.Errorf("invalid frame header length %s", i), id)
 				continue
 			}
 
@@ -235,7 +251,7 @@ func (n *Nodosum) readLoop(id string) {
 				continue
 			}
 			if i != int(header.Length) {
-				n.handleConnError(fmt.Errorf("invalid frame payload length %d", i), id)
+				n.handleConnError(fmt.Errorf("invalid frame payload length %s", i), id)
 				continue
 			}
 
@@ -258,7 +274,7 @@ func (n *Nodosum) writeLoop(id string) {
 	for {
 		select {
 		case <-connChan.ctx.Done():
-			n.logger.Debug(fmt.Sprintf("write loop for %d cancelled", id))
+			n.logger.Debug(fmt.Sprintf("write loop for %s cancelled", id))
 			return
 		case msg := <-connChan.writeChan:
 			if msg == nil {
