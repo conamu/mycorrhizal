@@ -33,7 +33,7 @@ func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 		ctx:       ctx,
 		cancel:    cancel,
 		readChan:  n.globalReadChannel,
-		writeChan: make(chan any),
+		writeChan: make(chan any, 100),
 	})
 }
 

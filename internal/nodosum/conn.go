@@ -227,18 +227,35 @@ func (n *Nodosum) readLoop(id string) {
 			n.logger.Debug(fmt.Sprintf("read loop for %s cancelled", id))
 			return
 		default:
-			// Receive and decode frame header
-			headerBytes := make([]byte, 11)
-			i, err := io.ReadFull(connChan.conn, headerBytes)
+			// Read fixed header (9 bytes: version, type, flag, length, appIDLen)
+			fixedHeaderBytes := make([]byte, 9)
+			i, err := io.ReadFull(connChan.conn, fixedHeaderBytes)
 			if err != nil {
 				n.handleConnError(err, id)
 				continue
 			}
-			if i != 11 {
-				n.handleConnError(fmt.Errorf("invalid frame header length %s", i), id)
+			if i != 9 {
+				n.handleConnError(fmt.Errorf("invalid fixed header length %d", i), id)
 				continue
 			}
 
+			// Read ApplicationID length from header
+			appIDLen := int(fixedHeaderBytes[7]) | int(fixedHeaderBytes[8])<<8
+
+			// Read variable ApplicationID
+			appIDBytes := make([]byte, appIDLen)
+			i, err = io.ReadFull(connChan.conn, appIDBytes)
+			if err != nil {
+				n.handleConnError(err, id)
+				continue
+			}
+			if i != appIDLen {
+				n.handleConnError(fmt.Errorf("invalid appID length %d", i), id)
+				continue
+			}
+
+			// Combine fixed header + appID for decoding
+			headerBytes := append(fixedHeaderBytes, appIDBytes...)
 			header := decodeFrameHeader(headerBytes)
 			payloadLength := header.Length
 			payloadBytes := make([]byte, payloadLength)

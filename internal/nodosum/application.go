@@ -50,11 +50,12 @@ type dataPackage struct {
 func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
 	sendWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-send", uniqueIdentifier), n.wg, n.applicationSendTask, n.logger, 0)
+	sendWorker.InputChan = make(chan any, 100)
 	sendWorker.OutputChan = n.globalWriteChannel
 	go sendWorker.Start()
 
 	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
-	receiveWorker.InputChan = make(chan any)
+	receiveWorker.InputChan = make(chan any, 100)
 	go receiveWorker.Start()
 
 	nodes := []string{}
