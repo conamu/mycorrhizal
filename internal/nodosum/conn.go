@@ -19,7 +19,7 @@ func (n *Nodosum) listenUdp() {
 			if err != nil {
 				n.logger.Info("udpConn close failed", "error", err.Error())
 			}
-			n.logger.Info("listenerTcp closed")
+			n.logger.Info("listenerUdp closed")
 		},
 	)
 
@@ -204,7 +204,6 @@ func (n *Nodosum) serverHandshake(conn net.Conn) string {
 }
 
 func (n *Nodosum) startRwLoops(id string) {
-	defer n.wg.Done()
 	n.wg.Add(2)
 
 	n.logger.Debug("startRwLoops", "id", id)
@@ -251,7 +250,7 @@ func (n *Nodosum) readLoop(id string) {
 				continue
 			}
 			if i != int(header.Length) {
-				n.handleConnError(fmt.Errorf("invalid frame payload length %s", i), id)
+				n.handleConnError(fmt.Errorf("invalid frame payload length %d", i), id)
 				continue
 			}
 

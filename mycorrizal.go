@@ -18,6 +18,7 @@ import (
 type Mycorrizal interface {
 	Start() error
 	Shutdown() error
+	RegisterApplication(uniqueIdentifier string) nodosum.Application
 }
 
 type mycorrizal struct {
@@ -144,6 +145,7 @@ func (mc *mycorrizal) Start() error {
 		mc.cancel()
 		return err
 	}
+	time.Sleep(time.Second * 3)
 	mc.logger.Info("mycorrizal startup complete")
 	return nil
 }
@@ -156,4 +158,8 @@ func (mc *mycorrizal) Shutdown() error {
 	mc.wg.Wait()
 	mc.logger.Info("mycorrizal shutdown complete")
 	return nil
+}
+
+func (mc *mycorrizal) RegisterApplication(uniqueIdentifier string) nodosum.Application {
+	return mc.nodosum.RegisterApplication(uniqueIdentifier)
 }

@@ -226,6 +226,8 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 		_, err = conn.Write(bytes)
 		_, err = conn.Write(connectionToken)
 
+		n.nodeAddrs.IpIdMap[addr] = hp.Id
+
 		n.startRwLoops(fh.ApplicationID)
 	}
 	return nil

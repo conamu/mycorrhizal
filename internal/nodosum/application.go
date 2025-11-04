@@ -51,16 +51,28 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
 	sendWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-send", uniqueIdentifier), n.wg, n.applicationSendTask, n.logger, 0)
 	sendWorker.OutputChan = n.globalWriteChannel
-	sendWorker.Start()
+	go sendWorker.Start()
 
 	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
 	receiveWorker.InputChan = make(chan any)
-	receiveWorker.Start()
+	go receiveWorker.Start()
+
+	nodes := []string{}
+
+	n.nodeAddrs.Mu.Lock()
+	for _, id := range n.nodeAddrs.IpIdMap {
+		if id == "" {
+			continue
+		}
+		nodes = append(nodes, id)
+	}
+	n.nodeAddrs.Mu.Unlock()
 
 	app := application{
 		id:            uniqueIdentifier,
 		sendWorker:    sendWorker,
 		receiveWorker: receiveWorker,
+		nodes:         nodes,
 	}
 
 	n.applications.Store(uniqueIdentifier, app)
@@ -71,8 +83,14 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 }
 
 func (a *application) Send(payload []byte, ids []string) error {
-	//TODO implement me
-	panic("implement me")
+	dp := dataPackage{
+		id:             a.id,
+		payload:        payload,
+		receivingNodes: ids,
+	}
+
+	a.sendWorker.InputChan <- &dp
+	return nil
 }
 
 func (a *application) SetReceiveFunc(f func(payload []byte) error) {
@@ -84,7 +102,10 @@ func (a *application) Nodes() []string {
 }
 
 func (n *Nodosum) applicationSendTask(w *worker.Worker, msg any) {
+	w.OutputChan <- msg
 }
 
 func (n *Nodosum) applicationReceiveTask(w *worker.Worker, msg any) {
+	pl := msg.([]byte)
+	n.logger.Debug("Received a message", "message", string(pl))
 }
