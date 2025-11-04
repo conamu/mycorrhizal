@@ -1,7 +1,6 @@
 package nodosum
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
@@ -54,13 +53,17 @@ type frameHeader struct {
 }
 
 func encodeFrameHeader(fh *frameHeader) []byte {
-	buf := make([]byte, 12)
+	appIDBytes := []byte(fh.ApplicationID)
+	appIDLen := uint16(len(appIDBytes))
+
+	buf := make([]byte, 9)
 
 	buf[0] = fh.Version
 	buf[1] = uint8(fh.Type)
 	buf[2] = uint8(fh.Flag)
 	binary.LittleEndian.PutUint32(buf[3:7], fh.Length)
-	buf = append(buf, []byte(fh.ApplicationID)...)
+	binary.LittleEndian.PutUint16(buf[7:9], appIDLen)
+	buf = append(buf, appIDBytes...)
 
 	return buf
 }
@@ -72,7 +75,8 @@ func decodeFrameHeader(frameHeaderBytes []byte) *frameHeader {
 	fh.Type = messageType(frameHeaderBytes[1])
 	fh.Flag = messageFlag(frameHeaderBytes[2])
 	fh.Length = binary.LittleEndian.Uint32(frameHeaderBytes[3:7])
-	fh.ApplicationID = string(bytes.Trim(frameHeaderBytes[7:], "\x00"))
+	appIDLen := binary.LittleEndian.Uint16(frameHeaderBytes[7:9])
+	fh.ApplicationID = string(frameHeaderBytes[9 : 9+appIDLen])
 
 	return &fh
 }

@@ -34,12 +34,25 @@ func (n *Nodosum) StartMultiplexer() {
 // multiplexerTaskInbound processes all packets coming from individual connections
 func (n *Nodosum) multiplexerTaskInbound(w *worker.Worker, msg any) {
 	frame := msg.([]byte)
-	header := decodeFrameHeader(frame[0:11])
+	// Read appIDLen from bytes 7-8 to determine header size
+	if len(frame) < 9 {
+		n.logger.Error("frame too short for header")
+		return
+	}
+	appIDLen := int(frame[7]) | int(frame[8])<<8
+	headerSize := 9 + appIDLen
+
+	if len(frame) < headerSize {
+		n.logger.Error("frame too short for full header")
+		return
+	}
+
+	header := decodeFrameHeader(frame[0:headerSize])
 	val, ok := n.applications.Load(header.ApplicationID)
 	if ok && val != nil {
 		app := val.(application)
 		// Only send payload to application
-		app.receiveWorker.InputChan <- frame[11:]
+		app.receiveWorker.InputChan <- frame[headerSize:]
 	}
 }
 
