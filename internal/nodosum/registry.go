@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 )
 
 type nodeConn struct {
@@ -15,6 +16,11 @@ type nodeConn struct {
 	conn      net.Conn
 	readChan  chan any
 	writeChan chan any
+}
+
+type NodeAddrs struct {
+	Mu      sync.Mutex
+	IpIdMap map[string]string
 }
 
 func (n *Nodosum) createConnChannel(id string, conn net.Conn) {

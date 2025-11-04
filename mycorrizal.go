@@ -89,8 +89,19 @@ func New(cfg *Config) (Mycorrizal, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	wg := &sync.WaitGroup{}
 
+	nodeAddr := nodosum.NodeAddrs{
+		Mu: sync.Mutex{},
+	}
+
+	ipid := make(map[string]string)
+	for _, addr := range cfg.NodeAddrs {
+		ipid[addr.String()] = ""
+		nodeAddr.IpIdMap = ipid
+	}
+
 	nodosumConfig := &nodosum.Config{
 		NodeId:                 id,
+		NodeAddrs:              &nodeAddr,
 		Ctx:                    ctx,
 		ListenPort:             cfg.ListenPort,
 		Logger:                 cfg.Logger,

@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	NodeId                 string
+	NodeAddrs              *NodeAddrs
 	Ctx                    context.Context
 	ListenPort             int
 	SharedSecret           string
