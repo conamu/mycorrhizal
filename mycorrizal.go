@@ -153,9 +153,9 @@ func (mc *mycorrizal) Start() error {
 
 func (mc *mycorrizal) Shutdown() error {
 	mc.logger.Info("mycorrizal shutting down")
-	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
-	mc.cancel()
 	mc.nodosum.Shutdown()
+	mc.cancel()
+	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
 	mc.wg.Wait()
 	mc.logger.Info("mycorrizal shutdown complete")
 	return nil

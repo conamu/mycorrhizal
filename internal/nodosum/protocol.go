@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"net"
+	"time"
 )
 
 /*
@@ -203,6 +204,8 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 		if n.tlsEnabled {
 			conn = tls.Client(conn, n.tlsConfig)
 		}
+
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 		connectionToken := []byte(hp.Token)
 
