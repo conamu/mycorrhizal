@@ -94,7 +94,6 @@ func (n *Nodosum) nodeAppSyncTask(w *worker.Worker, msg any) {
 	n.applications.Range(func(key, value any) bool {
 		app := value.(*application)
 		app.nodes = nodes
-		n.applications.Store(key, app)
 		return true
 	})
 }
