@@ -105,7 +105,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		muxWorkerCount:        cfg.MultiplexerWorkerCount,
 	}
 
-	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*1)
+	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*3)
 	n.nodeAppSyncWorker = nodeAppSync
 
 	return n, nil
