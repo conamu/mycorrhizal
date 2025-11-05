@@ -105,7 +105,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		muxWorkerCount:        cfg.MultiplexerWorkerCount,
 	}
 
-	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*10)
+	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*1)
 	n.nodeAppSyncWorker = nodeAppSync
 
 	return n, nil
@@ -133,8 +133,6 @@ func (n *Nodosum) Start() error {
 	)
 
 	go n.nodeAppSyncWorker.Start()
-
-	time.Sleep(time.Second * 2)
 
 	packet := n.encodeHandshakePacket(&handshakeUdpPacket{
 		Version:  1,
