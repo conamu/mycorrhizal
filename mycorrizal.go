@@ -19,6 +19,7 @@ type Mycorrizal interface {
 	Start() error
 	Shutdown() error
 	RegisterApplication(uniqueIdentifier string) nodosum.Application
+	GetApplication(uniqueIdentifier string) nodosum.Application
 }
 
 type mycorrizal struct {
@@ -90,19 +91,19 @@ func New(cfg *Config) (Mycorrizal, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	wg := &sync.WaitGroup{}
 
-	nodeAddr := nodosum.NodeAddrs{
-		Mu: sync.Mutex{},
+	nodeMeta := nodosum.NodeMetaMap{
+		Mu:  sync.Mutex{},
+		IPs: make([]string, 0),
+		Map: make(map[string]nodosum.NodeMeta),
 	}
 
-	ipid := make(map[string]string)
 	for _, addr := range cfg.NodeAddrs {
-		ipid[addr.String()] = ""
-		nodeAddr.IpIdMap = ipid
+		nodeMeta.IPs = append(nodeMeta.IPs, addr.String())
 	}
 
 	nodosumConfig := &nodosum.Config{
 		NodeId:                 id,
-		NodeAddrs:              &nodeAddr,
+		NodeAddrs:              &nodeMeta,
 		Ctx:                    ctx,
 		ListenPort:             cfg.ListenPort,
 		Logger:                 cfg.Logger,
@@ -162,4 +163,8 @@ func (mc *mycorrizal) Shutdown() error {
 
 func (mc *mycorrizal) RegisterApplication(uniqueIdentifier string) nodosum.Application {
 	return mc.nodosum.RegisterApplication(uniqueIdentifier)
+}
+
+func (mc *mycorrizal) GetApplication(uniqueIdentifier string) nodosum.Application {
+	return mc.nodosum.GetApplication(uniqueIdentifier)
 }

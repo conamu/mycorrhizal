@@ -60,16 +60,16 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
 	nodes := []string{}
 
-	n.nodeAddrs.Mu.Lock()
-	for _, id := range n.nodeAddrs.IpIdMap {
-		if id == "" {
+	n.nodeMeta.Mu.Lock()
+	for _, meta := range n.nodeMeta.Map {
+		if !meta.alive {
 			continue
 		}
-		nodes = append(nodes, id)
+		nodes = append(nodes, meta.ID)
 	}
-	n.nodeAddrs.Mu.Unlock()
+	n.nodeMeta.Mu.Unlock()
 
-	app := application{
+	app := &application{
 		id:            uniqueIdentifier,
 		sendWorker:    sendWorker,
 		receiveWorker: receiveWorker,
@@ -80,7 +80,15 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
 	//TODO: Find a way to keep nodes in sync for the application instances
 
-	return &app
+	return app
+}
+
+func (n *Nodosum) GetApplication(uniqueIdentifier string) Application {
+	val, ok := n.applications.Load(uniqueIdentifier)
+	if ok {
+		return val.(*application)
+	}
+	return nil
 }
 
 func (a *application) Send(payload []byte, ids []string) error {
