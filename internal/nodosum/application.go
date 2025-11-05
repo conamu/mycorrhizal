@@ -7,24 +7,6 @@ import (
 	"github.com/conamu/go-worker"
 )
 
-/*
-Introduce a configurable amount of workers that do this:
-one type of worker should receive all packets of a connection,
-unpack and send to the different subsystems that should receive them by ID
-
-other type of worker gets all requests, generates IDs,
-adds IDs to some service registry and sends all packets to the corresponding connections.
-
-Could also think of introducing Subsystem or Application IDs as channels.
-Sort of like messaging topics, multiplexed ontop of a TCP connection between 2 nodes.
-This could work well, also as a basis for the other systems.
-
-Concept of Applications:
-Applications can register themselves with a unique string identifier that has to be unique among the whole
-cluster. An application gets its own "channel".
-Packets for one application are always Identified by its Identifier and routed to this one application.
-*/
-
 type Application interface {
 	// Send sends a Command to one or more Nodes specified by ID. Specifying no ID will broadcast the packet to all Nodes.
 	Send(payload []byte, ids []string) error
@@ -78,9 +60,6 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 	}
 
 	n.applications.Store(uniqueIdentifier, app)
-
-	//TODO: Find a way to keep nodes in sync for the application instances
-
 	return app
 }
 
