@@ -80,7 +80,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		cfg.Logger.Warn("running in static discovery mode but found no addresses in NodeAddrs array")
 	}
 
-	if cfg.DiscoveryMode == DC_MODE_CONSUL || cfg.DiscoveryMode == DC_MODE_DNS_SD && cfg.DiscoveryHost == nil {
+	if (cfg.DiscoveryMode == DC_MODE_CONSUL || cfg.DiscoveryMode == DC_MODE_DNS_SD) && cfg.DiscoveryHost == nil {
 		return nil, errors.New("discovery modes consul and DNS Service discovery need discoveryHost to be set")
 	}
 
