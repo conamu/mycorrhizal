@@ -50,9 +50,14 @@ func (n *Nodosum) multiplexerTaskInbound(w *worker.Worker, msg any) {
 	header := decodeFrameHeader(frame[0:headerSize])
 	val, ok := n.applications.Load(header.ApplicationID)
 	if ok && val != nil {
-		app := val.(*application)
-		// Only send payload to application
-		app.receiveWorker.InputChan <- frame[headerSize:]
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+			app := val.(*application)
+			// Only send payload to application
+			app.receiveWorker.InputChan <- frame[headerSize:]
+		}
 	}
 }
 

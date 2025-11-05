@@ -128,7 +128,7 @@ func (n *Nodosum) encodeHandshakePacket(hp *handshakeUdpPacket) []byte {
 	}
 
 	tokenBytes := []byte(hp.Token)
-	if len(secretBytes) != 64 {
+	if len(tokenBytes) != 64 {
 		return nil
 	}
 

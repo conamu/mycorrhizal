@@ -77,6 +77,7 @@ func (n *Nodosum) closeConnChannel(id string) {
 		n.nodeMeta.Mu.Lock()
 		nm := n.nodeMeta.Map[id]
 		nm.alive = false
+		n.nodeMeta.Map[id] = nm
 		n.nodeMeta.Mu.Unlock()
 	}
 	n.connections.Delete(id)
