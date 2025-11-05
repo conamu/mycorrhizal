@@ -1,6 +1,7 @@
 package nodosum
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/conamu/go-worker"
@@ -92,13 +93,19 @@ func (n *Nodosum) GetApplication(uniqueIdentifier string) Application {
 }
 
 func (a *application) Send(payload []byte, ids []string) error {
-	dp := dataPackage{
-		id:             a.id,
-		payload:        payload,
-		receivingNodes: ids,
+	select {
+	case <-a.sendWorker.Ctx.Done():
+		return errors.New("send channel closed")
+	default:
+		dp := dataPackage{
+			id:             a.id,
+			payload:        payload,
+			receivingNodes: ids,
+		}
+
+		a.sendWorker.InputChan <- &dp
 	}
 
-	a.sendWorker.InputChan <- &dp
 	return nil
 }
 

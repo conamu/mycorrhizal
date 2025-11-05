@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/conamu/go-worker"
 )
@@ -37,6 +38,7 @@ type NodeMeta struct {
 
 func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 	ctx, cancel := context.WithCancel(n.ctx)
+	conn.SetReadDeadline(time.Time{})
 
 	n.nodeMeta.Mu.Lock()
 

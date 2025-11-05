@@ -17,19 +17,21 @@ func (n *Nodosum) listenUdp() {
 			<-n.ctx.Done()
 			err := n.udpConn.Close()
 			if err != nil {
-				n.logger.Info("udpConn close failed", "error", err.Error())
+				n.logger.Error("udpConn close failed", "error", err.Error())
 			}
-			n.logger.Info("listenerUdp closed")
+			n.logger.Debug("listenerUdp closing")
 		},
 	)
 
 	for {
 		select {
 		case <-n.ctx.Done():
+			n.logger.Debug("listenerUdp closed")
 			return
 		default:
 			buf := make([]byte, 1024)
 			bytesRead, addr, err := n.udpConn.ReadFromUDP(buf)
+			n.wg.Add(1)
 			go n.handleUdp(buf, bytesRead, addr, err)
 		}
 	}
@@ -39,6 +41,7 @@ func (n *Nodosum) listenUdp() {
 // handleUdp will decode the packet received and based on the defined udp handshake
 // it will enable creation of a permanent tcp connection
 func (n *Nodosum) handleUdp(buf []byte, bytesRead int, addr *net.UDPAddr, err error) {
+	defer n.wg.Done()
 
 	err = n.handleUdpError(err)
 	if err != nil {
@@ -84,9 +87,9 @@ func (n *Nodosum) listenTcp() {
 			<-n.ctx.Done()
 			err := n.listenerTcp.Close()
 			if err != nil {
-				n.logger.Info("listenerTcp close failed", "error", err.Error())
+				n.logger.Debug("listenerTcp close failed", "error", err.Error())
 			}
-			n.logger.Info("listenerTcp closed")
+			n.logger.Debug("listenerTcp closing")
 		},
 	)
 
@@ -94,6 +97,7 @@ func (n *Nodosum) listenTcp() {
 	for {
 		select {
 		case <-n.ctx.Done():
+			n.logger.Debug("listenerTcp closed")
 			return
 		default:
 			conn, err := n.listenerTcp.Accept()
@@ -273,7 +277,12 @@ func (n *Nodosum) readLoop(id string) {
 
 			frameBytes := append(headerBytes, payloadBytes...)
 
-			connChan.readChan <- frameBytes
+			select {
+			case <-connChan.ctx.Done():
+				continue
+			default:
+				connChan.readChan <- frameBytes
+			}
 		}
 	}
 }
