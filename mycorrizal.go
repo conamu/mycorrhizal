@@ -146,7 +146,6 @@ func (mc *mycorrizal) Start() error {
 		mc.cancel()
 		return err
 	}
-	time.Sleep(time.Second * 3)
 	mc.logger.Info("mycorrizal startup complete")
 	return nil
 }
