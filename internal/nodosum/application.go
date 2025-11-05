@@ -109,8 +109,14 @@ func (a *application) Send(payload []byte, ids []string) error {
 	return nil
 }
 
-func (a *application) SetReceiveFunc(f func(payload []byte) error) {
-	a.receiveFunc = f
+func (a *application) SetReceiveFunc(callback func(payload []byte) error) {
+	a.receiveWorker.TaskFunc = func(w *worker.Worker, msg any) {
+		pl := msg.([]byte)
+		err := callback(pl)
+		if err != nil {
+			w.Logger.Error("callback function error", "err", err.Error())
+		}
+	}
 }
 
 func (a *application) Nodes() []string {
@@ -122,6 +128,5 @@ func (n *Nodosum) applicationSendTask(w *worker.Worker, msg any) {
 }
 
 func (n *Nodosum) applicationReceiveTask(w *worker.Worker, msg any) {
-	pl := msg.([]byte)
-	n.logger.Debug("Received a message", "message", string(pl))
+	w.Logger.Warn("application receive callback is not set")
 }
