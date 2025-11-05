@@ -9,6 +9,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/conamu/go-worker"
 )
 
 /*
@@ -27,16 +29,17 @@ SCOPE
 */
 
 type Nodosum struct {
-	nodeId       string
-	nodeAddrs    *NodeAddrs
-	ctx          context.Context
-	connInit     *connInit
-	listenerTcp  net.Listener
-	udpConn      *net.UDPConn
-	sharedSecret string
-	logger       *slog.Logger
-	connections  *sync.Map
-	applications *sync.Map
+	nodeId            string
+	nodeMeta          *NodeMetaMap
+	ctx               context.Context
+	connInit          *connInit
+	listenerTcp       net.Listener
+	udpConn           *net.UDPConn
+	sharedSecret      string
+	logger            *slog.Logger
+	connections       *sync.Map
+	applications      *sync.Map
+	nodeAppSyncWorker *worker.Worker
 	// globalReadChannel transfers all incoming packets from connections to the multiplexer
 	globalReadChannel chan any
 	// globalWriteChannel transfers all outgoing packets from applications to the multiplexer
@@ -77,10 +80,10 @@ func New(cfg *Config) (*Nodosum, error) {
 	udpLocalAddr := &net.UDPAddr{Port: cfg.ListenPort}
 	udpConn, err := net.ListenUDP("udp", udpLocalAddr)
 
-	return &Nodosum{
-		nodeId:    cfg.NodeId,
-		nodeAddrs: cfg.NodeAddrs,
-		ctx:       cfg.Ctx,
+	n := &Nodosum{
+		nodeId:   cfg.NodeId,
+		nodeMeta: cfg.NodeAddrs,
+		ctx:      cfg.Ctx,
 		connInit: &connInit{
 			mu:     sync.Mutex{},
 			val:    rand.Uint32(),
@@ -100,7 +103,12 @@ func New(cfg *Config) (*Nodosum, error) {
 		tlsConfig:             tlsConf,
 		multiplexerBufferSize: cfg.MultiplexerBufferSize,
 		muxWorkerCount:        cfg.MultiplexerWorkerCount,
-	}, nil
+	}
+
+	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*10)
+	n.nodeAppSyncWorker = nodeAppSync
+
+	return n, nil
 }
 
 func (n *Nodosum) Start() error {
@@ -124,6 +132,8 @@ func (n *Nodosum) Start() error {
 		},
 	)
 
+	go n.nodeAppSyncWorker.Start()
+
 	time.Sleep(time.Second * 2)
 
 	packet := n.encodeHandshakePacket(&handshakeUdpPacket{
@@ -134,10 +144,10 @@ func (n *Nodosum) Start() error {
 		Secret:   n.sharedSecret,
 	})
 
-	n.nodeAddrs.Mu.Lock()
-	for addr, _ := range n.nodeAddrs.IpIdMap {
+	n.nodeMeta.Mu.Lock()
+	for _, ip := range n.nodeMeta.IPs {
 
-		a, err := net.ResolveUDPAddr("udp", addr)
+		a, err := net.ResolveUDPAddr("udp", ip)
 		if err != nil {
 			n.logger.Error("failed to resolve udp addr", "err", err)
 			continue
@@ -148,12 +158,13 @@ func (n *Nodosum) Start() error {
 			n.logger.Error("failed to write udp packet", "err", err)
 		}
 	}
-	n.nodeAddrs.Mu.Unlock()
+	n.nodeMeta.Mu.Unlock()
 
 	return nil
 }
 
 func (n *Nodosum) Shutdown() {
+	n.nodeAppSyncWorker.Stop()
 	n.connections.Range(func(k, v interface{}) bool {
 		id := k.(string)
 		n.closeConnChannel(id)

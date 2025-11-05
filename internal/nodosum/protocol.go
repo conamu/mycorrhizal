@@ -204,8 +204,6 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 			conn = tls.Client(conn, n.tlsConfig)
 		}
 
-		n.createConnChannel(hp.Id, conn)
-
 		connectionToken := []byte(hp.Token)
 
 		bytes := encodeFrameHeader(&frameHeader{
@@ -230,9 +228,8 @@ func (n *Nodosum) handleUdpPacket(hp *handshakeUdpPacket, addr string) *handshak
 		_, err = conn.Write(bytes)
 		_, err = conn.Write(connectionToken)
 
-		n.nodeAddrs.IpIdMap[addr] = hp.Id
-
-		n.startRwLoops(fh.ApplicationID)
+		n.createConnChannel(hp.Id, conn)
+		n.startRwLoops(hp.Id)
 	}
 	return nil
 }
