@@ -15,7 +15,7 @@ the command gets routed to its read channel.
 
 */
 
-func (n *Nodosum) StartMultiplexer() {
+func (n *Nodosum) startMultiplexer() {
 
 	for range n.muxWorkerCount {
 		mpWorker := worker.NewWorker(n.ctx, "multiplexer-inbound", n.wg, n.multiplexerTaskInbound, n.logger, 0)

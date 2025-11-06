@@ -32,6 +32,7 @@ type Nodosum struct {
 	nodeId            string
 	nodeMeta          *NodeMetaMap
 	ctx               context.Context
+	cancel            context.CancelFunc
 	connInit          *connInit
 	listenerTcp       net.Listener
 	udpConn           *net.UDPConn
@@ -50,6 +51,7 @@ type Nodosum struct {
 	tlsConfig             *tls.Config
 	multiplexerBufferSize int
 	muxWorkerCount        int
+	readyChan             chan any
 }
 
 type connInit struct {
@@ -80,10 +82,13 @@ func New(cfg *Config) (*Nodosum, error) {
 	udpLocalAddr := &net.UDPAddr{Port: cfg.ListenPort}
 	udpConn, err := net.ListenUDP("udp", udpLocalAddr)
 
+	ctx, cancel := context.WithCancel(cfg.Ctx)
+
 	n := &Nodosum{
 		nodeId:   cfg.NodeId,
 		nodeMeta: cfg.NodeAddrs,
-		ctx:      cfg.Ctx,
+		ctx:      ctx,
+		cancel:   cancel,
 		connInit: &connInit{
 			mu:     sync.Mutex{},
 			val:    rand.Uint32(),
@@ -103,6 +108,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		tlsConfig:             tlsConf,
 		multiplexerBufferSize: cfg.MultiplexerBufferSize,
 		muxWorkerCount:        cfg.MultiplexerWorkerCount,
+		readyChan:             make(chan any),
 	}
 
 	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*3)
@@ -119,7 +125,7 @@ func (n *Nodosum) Start() error {
 		return errors.New("invalid shared secret, must be 64 bytes")
 	}
 
-	n.StartMultiplexer()
+	n.startMultiplexer()
 
 	n.wg.Go(
 		func() {
@@ -157,8 +163,24 @@ func (n *Nodosum) Start() error {
 		}
 	}
 	n.nodeMeta.Mu.Unlock()
+	close(n.readyChan)
 
 	return nil
+}
+
+func (n *Nodosum) Ready(timeout time.Duration) error {
+	t := time.NewTimer(timeout)
+	for {
+		select {
+		case <-n.readyChan:
+			n.logger.Debug("nodosum ready")
+			return nil
+		case <-t.C:
+			return errors.New("nodosum did not send ready signal before timeout")
+		case <-n.ctx.Done():
+			return errors.New("context closed")
+		}
+	}
 }
 
 func (n *Nodosum) Shutdown() {
@@ -168,4 +190,7 @@ func (n *Nodosum) Shutdown() {
 		n.closeConnChannel(id)
 		return true
 	})
+	n.cancel()
+	n.logger.Debug("nodosum shutdown waiting on routines to exit...")
+	n.wg.Wait()
 }
