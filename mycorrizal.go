@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/conamu/mycorrizal/internal/mycel"
 	"github.com/conamu/mycorrizal/internal/nodosum"
 	"github.com/google/uuid"
 )
@@ -33,6 +34,7 @@ type mycorrizal struct {
 	nodeAddrs     []net.TCPAddr
 	singleMode    bool
 	nodosum       *nodosum.Nodosum
+	mycel         mycel.Mycel
 }
 
 func New(cfg *Config) (Mycorrizal, error) {
@@ -89,7 +91,6 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	wg := &sync.WaitGroup{}
 
 	nodeMeta := nodosum.NodeMetaMap{
 		Mu:  sync.Mutex{},
@@ -107,7 +108,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		Ctx:                    ctx,
 		ListenPort:             cfg.ListenPort,
 		Logger:                 cfg.Logger,
-		Wg:                     wg,
+		Wg:                     &sync.WaitGroup{},
 		HandshakeTimeout:       cfg.HandshakeTimeout,
 		SharedSecret:           cfg.SharedSecret,
 		TlsEnabled:             cfg.ClusterTLSEnabled,
@@ -124,10 +125,22 @@ func New(cfg *Config) (Mycorrizal, error) {
 		return nil, err
 	}
 
+	mycelConfig := &mycel.Config{
+		Ctx:     ctx,
+		Logger:  cfg.Logger,
+		Nodosum: ndsm,
+	}
+
+	mcl, err := mycel.New(mycelConfig)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
 	return &mycorrizal{
 		nodeId:        id,
 		ctx:           ctx,
-		wg:            wg,
+		wg:            &sync.WaitGroup{},
 		cancel:        cancel,
 		logger:        cfg.Logger,
 		httpClient:    httpClient,
@@ -135,24 +148,58 @@ func New(cfg *Config) (Mycorrizal, error) {
 		nodeAddrs:     cfg.NodeAddrs,
 		singleMode:    cfg.SingleMode,
 		nodosum:       ndsm,
+		mycel:         mcl,
 	}, nil
 }
 
 func (mc *mycorrizal) Start() error {
 	mc.logger.Info("mycorrizal starting")
-	err := mc.nodosum.Start()
-	if err != nil {
-		mc.logger.Error(err.Error())
-		mc.cancel()
-		return err
-	}
+	wg := &sync.WaitGroup{}
+	wg.Go(func() {
+		err := mc.nodosum.Start()
+		if err != nil {
+			mc.logger.Error(err.Error())
+			mc.cancel()
+		}
+		err = mc.nodosum.Ready(time.Second * 30)
+		if err != nil {
+			mc.logger.Error(err.Error())
+			mc.cancel()
+		}
+	})
+	mc.wg.Add(1)
+
+	wg.Go(func() {
+		err := mc.mycel.Start()
+		if err != nil {
+			mc.logger.Error(err.Error())
+			mc.cancel()
+		}
+		err = mc.mycel.Ready(time.Second * 30)
+		if err != nil {
+			mc.logger.Error(err.Error())
+			mc.cancel()
+		}
+	})
+	mc.wg.Add(1)
+	wg.Wait()
 	mc.logger.Info("mycorrizal startup complete")
 	return nil
 }
 
 func (mc *mycorrizal) Shutdown() error {
 	mc.logger.Info("mycorrizal shutting down")
-	mc.nodosum.Shutdown()
+
+	mc.wg.Go(func() {
+		mc.nodosum.Shutdown()
+		mc.wg.Done()
+	})
+
+	mc.wg.Go(func() {
+		mc.mycel.Shutdown()
+		mc.wg.Done()
+	})
+
 	mc.cancel()
 	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
 	mc.wg.Wait()
