@@ -23,7 +23,7 @@ type nodeConn struct {
 }
 
 type NodeMetaMap struct {
-	Mu  sync.Mutex
+	sync.Mutex
 	IPs []string
 	// Map ID to NodeMeta
 	Map map[string]NodeMeta
@@ -40,7 +40,7 @@ func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 	ctx, cancel := context.WithCancel(n.ctx)
 	conn.SetReadDeadline(time.Time{})
 
-	n.nodeMeta.Mu.Lock()
+	n.nodeMeta.Lock()
 
 	ipPort := strings.Split(conn.RemoteAddr().String(), ":")
 	nm := NodeMeta{
@@ -51,7 +51,7 @@ func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 	}
 	n.nodeMeta.Map[id] = nm
 
-	n.nodeMeta.Mu.Unlock()
+	n.nodeMeta.Unlock()
 
 	n.connections.Store(id, &nodeConn{
 		connId:    id,
@@ -74,25 +74,25 @@ func (n *Nodosum) closeConnChannel(id string) {
 		if err != nil && !errors.Is(err, net.ErrClosed) {
 			n.logger.Error("error closing comms channels for", "error", err.Error())
 		}
-		n.nodeMeta.Mu.Lock()
+		n.nodeMeta.Lock()
 		nm := n.nodeMeta.Map[id]
 		nm.alive = false
 		n.nodeMeta.Map[id] = nm
-		n.nodeMeta.Mu.Unlock()
+		n.nodeMeta.Unlock()
 	}
 	n.connections.Delete(id)
 }
 
 func (n *Nodosum) nodeAppSyncTask(w *worker.Worker, msg any) {
 	nodes := []string{}
-	n.nodeMeta.Mu.Lock()
+	n.nodeMeta.Lock()
 	for _, meta := range n.nodeMeta.Map {
 		if !meta.alive {
 			continue
 		}
 		nodes = append(nodes, meta.ID)
 	}
-	n.nodeMeta.Mu.Unlock()
+	n.nodeMeta.Unlock()
 
 	n.applications.Range(func(key, value any) bool {
 		app := value.(*application)
