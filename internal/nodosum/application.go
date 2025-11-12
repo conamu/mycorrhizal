@@ -43,14 +43,14 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
 	nodes := []string{}
 
-	n.nodeMeta.Mu.Lock()
+	n.nodeMeta.Lock()
 	for _, meta := range n.nodeMeta.Map {
 		if !meta.alive {
 			continue
 		}
 		nodes = append(nodes, meta.ID)
 	}
-	n.nodeMeta.Mu.Unlock()
+	n.nodeMeta.Unlock()
 
 	app := &application{
 		id:            uniqueIdentifier,

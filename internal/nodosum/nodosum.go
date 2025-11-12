@@ -148,7 +148,7 @@ func (n *Nodosum) Start() error {
 		Secret:   n.sharedSecret,
 	})
 
-	n.nodeMeta.Mu.Lock()
+	n.nodeMeta.Lock()
 	for _, ip := range n.nodeMeta.IPs {
 
 		a, err := net.ResolveUDPAddr("udp", ip)
@@ -162,7 +162,7 @@ func (n *Nodosum) Start() error {
 			n.logger.Error("failed to write udp packet", "err", err)
 		}
 	}
-	n.nodeMeta.Mu.Unlock()
+	n.nodeMeta.Unlock()
 	close(n.readyChan)
 
 	return nil

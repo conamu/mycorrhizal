@@ -93,7 +93,6 @@ func New(cfg *Config) (Mycorrizal, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	nodeMeta := nodosum.NodeMetaMap{
-		Mu:  sync.Mutex{},
 		IPs: make([]string, 0),
 		Map: make(map[string]nodosum.NodeMeta),
 	}
