@@ -3,37 +3,46 @@ package mycel
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"sort"
 	"sync"
 	"time"
 )
 
 /*
-Data structure Design for leaderless distributes linked list based LRU and TTL Cache
+Data structure Design for leaderless distributed linked list based LRU and TTL Cache
 
-Basic doubly linked list - every node has its own dll based lru list and evicts accordingly.
+Every node has its own Doubly Linked List based LRU Cache and evicts accordingly.
 
-If a values hash indicates remote data, it is fetched.
+With the cache key and node ids the correct primary nodes and N backups are calculated via rendezvous caching.
 
-Every node has a minimum of 3 data supplies, best is 5. If one node returns dead from nodosum, the next one is called.
+Local Processes:
 
-This requires at least 5 nodes to work flawlessly, minimum of 3.
+Data Retrieval:
+- Entry is pushed to top of Cache Bucket LRU List
 
-If data available locally -> get data, return, push to top
+Data Entry:
+- new cache node is created and put to top of LRU List
+- TTL is set to default or according to input
 
-if data remote:
- - request data from owner node (this node has the original copy and is guaranteed to be up to date)
- 	- if nodosum responds with node being dead, use the replicaNode list to fetch the data.
- 		- node will need to flag new ownerNode from top of replicaNodes array and notify the cluster of that change.
-	- when remote data is accessed the remote node will push it to the top of the list
-
-
-
-
+Other allowed interactions:
+- Data Deletion: remove from map and from LRU List
+- Update: Push to top
+- Set TTL: Push to Top and update TTL
 
 */
 
-// Local dll based cache with ttls
+// cache holds references to all nodes and buckets protected by mu
+type cache struct {
+	keyValMu     *sync.RWMutex
+	keyVal       map[string]*node
+	lruBucketsMu *sync.RWMutex
+	lruBuckets   map[string]*cacheBucket
+	// remoteCacheNodeHashMap stores references to the primary replica of the cache
+	// key to avoid calculation of primary node on every read
+	remoteCacheNodeHashMap map[string]string
+}
 
+// cacheBucket is a local dll based cache with ttls
 type cacheBucket struct {
 	sync.Mutex
 	head *node
@@ -42,7 +51,6 @@ type cacheBucket struct {
 }
 
 type node struct {
-	id   string
 	next *node
 	prev *node
 	data any
@@ -53,20 +61,36 @@ type node struct {
 	Rendezvous hashing functions for deterministic cache node selection and fallback
 */
 
-type RendezvousHash struct {
-	sync.Mutex
-	nodes []hashNode
-}
-
-type hashNode struct {
+type replicaNode struct {
 	id    string
 	score uint64
 }
 
-func (*RendezvousHash) hashScore(key, nodeId string) uint64 {
+// score calculates the score of a node selection for a cache key. Data is written to N nodes with highest scores
+func (m *mycel) score(key, nodeId string) uint64 {
 	h := sha256.New()
 	h.Write([]byte(key))
 	h.Write([]byte(nodeId))
 	sum := h.Sum(nil)
 	return binary.LittleEndian.Uint64(sum[:8])
+}
+
+// getReplicas calculates N possible replicas for cache key. Returned slice is sorted by highest score.
+func (m *mycel) getReplicas(key string, replicas int) []replicaNode {
+	nodes := m.app.Nodes()
+	var scoredNodes []replicaNode
+
+	for _, nodeId := range nodes {
+		nodeScore := m.score(key, nodeId)
+		scoredNodes = append(scoredNodes, replicaNode{
+			id:    nodeId,
+			score: nodeScore,
+		})
+	}
+
+	sort.Slice(scoredNodes, func(i, j int) bool {
+		return scoredNodes[i].score > scoredNodes[j].score
+	})
+
+	return scoredNodes
 }

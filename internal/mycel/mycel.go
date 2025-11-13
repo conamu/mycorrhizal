@@ -22,6 +22,7 @@ type mycel struct {
 	wg        *sync.WaitGroup
 	logger    *slog.Logger
 	ndsm      *nodosum.Nodosum
+	app       nodosum.Application
 	readyChan chan any
 }
 
@@ -67,7 +68,7 @@ func New(cfg *Config) (Mycel, error) {
 	}, nil
 }
 
-func (m mycel) Start() error {
+func (m *mycel) Start() error {
 	m.logger.Debug("mycel waiting on nodosum to be ready...")
 	err := m.ndsm.Ready(time.Second * 30)
 	if err != nil {
@@ -75,11 +76,12 @@ func (m mycel) Start() error {
 		return errors.Join(errors.New("failed to initialize mycel"), err)
 	}
 	m.logger.Debug("starting mycel")
+	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
 	close(m.readyChan)
 	return nil
 }
 
-func (m mycel) Ready(timeout time.Duration) error {
+func (m *mycel) Ready(timeout time.Duration) error {
 	t := time.NewTimer(timeout)
 	for {
 		select {
@@ -94,7 +96,7 @@ func (m mycel) Ready(timeout time.Duration) error {
 	}
 }
 
-func (m mycel) Shutdown() {
+func (m *mycel) Shutdown() {
 	m.logger.Debug("mycel shutdown")
 	m.cancel()
 	m.logger.Debug("mycel waiting on routines to exit...")
