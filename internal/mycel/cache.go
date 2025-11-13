@@ -31,19 +31,40 @@ Other allowed interactions:
 
 */
 
-// cache holds references to all nodes and buckets protected by mu
-type cache struct {
-	keyValMu     *sync.RWMutex
-	keyVal       map[string]*node
-	lruBucketsMu *sync.RWMutex
-	lruBuckets   map[string]*cacheBucket
-	// remoteCacheNodeHashMap stores references to the primary replica of the cache
-	// key to avoid calculation of primary node on every read
-	remoteCacheNodeHashMap map[string]string
+func (m *mycel) initCache() {
+	m.cache = &cache{
+		keyVal:                 &keyVal{data: make(map[string]*node)},
+		lruBuckets:             &lruBuckets{data: make(map[string]*lruBucket)},
+		remoteCacheNodeHashMap: &remoteCacheNodeHashMap{data: make(map[string]string)},
+	}
 }
 
-// cacheBucket is a local dll based cache with ttls
-type cacheBucket struct {
+// cache holds references to all nodes and buckets protected by mu
+type cache struct {
+	keyVal                 *keyVal
+	lruBuckets             *lruBuckets
+	remoteCacheNodeHashMap *remoteCacheNodeHashMap
+}
+
+type keyVal struct {
+	sync.RWMutex
+	data map[string]*node
+}
+
+type lruBuckets struct {
+	sync.RWMutex
+	data map[string]*lruBucket
+}
+
+// remoteCacheNodeHashMap stores references to the primary replica of the cache
+// key to avoid calculation of primary node on every read
+type remoteCacheNodeHashMap struct {
+	sync.RWMutex
+	data map[string]string
+}
+
+// lruBucket is a local dll based cache with ttls
+type lruBucket struct {
 	sync.Mutex
 	head *node
 	tail *node
@@ -80,7 +101,10 @@ func (m *mycel) getReplicas(key string, replicas int) []replicaNode {
 	nodes := m.app.Nodes()
 	var scoredNodes []replicaNode
 
-	for _, nodeId := range nodes {
+	for i, nodeId := range nodes {
+		if i >= replicas {
+			break
+		}
 		nodeScore := m.score(key, nodeId)
 		scoredNodes = append(scoredNodes, replicaNode{
 			id:    nodeId,

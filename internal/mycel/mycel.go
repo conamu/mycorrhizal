@@ -24,6 +24,7 @@ type mycel struct {
 	ndsm      *nodosum.Nodosum
 	app       nodosum.Application
 	readyChan chan any
+	cache     *cache
 }
 
 /*
@@ -58,14 +59,18 @@ Nodes:
 func New(cfg *Config) (Mycel, error) {
 	ctx, cancel := context.WithCancel(cfg.Ctx)
 
-	return &mycel{
+	m := &mycel{
 		ctx:       ctx,
 		cancel:    cancel,
 		wg:        &sync.WaitGroup{},
 		logger:    cfg.Logger,
 		ndsm:      cfg.Nodosum,
 		readyChan: make(chan any),
-	}, nil
+	}
+
+	m.initCache()
+
+	return m, nil
 }
 
 func (m *mycel) Start() error {
