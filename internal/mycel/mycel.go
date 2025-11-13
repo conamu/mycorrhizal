@@ -17,14 +17,15 @@ type Mycel interface {
 }
 
 type mycel struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        *sync.WaitGroup
-	logger    *slog.Logger
-	ndsm      *nodosum.Nodosum
-	app       nodosum.Application
-	readyChan chan any
-	cache     *cache
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           *sync.WaitGroup
+	logger       *slog.Logger
+	ndsm         *nodosum.Nodosum
+	app          nodosum.Application
+	readyChan    chan any
+	cache        *cache
+	replicaCount int
 }
 
 /*

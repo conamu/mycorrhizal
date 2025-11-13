@@ -17,6 +17,7 @@ import (
 )
 
 type Mycorrizal interface {
+	mycel.Application
 	Start() error
 	Shutdown() error
 	RegisterApplication(uniqueIdentifier string) nodosum.Application
@@ -125,9 +126,10 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	mycelConfig := &mycel.Config{
-		Ctx:     ctx,
-		Logger:  cfg.Logger,
-		Nodosum: ndsm,
+		Ctx:          ctx,
+		Logger:       cfg.Logger,
+		Nodosum:      ndsm,
+		ReplicaCount: cfg.CacheReplicaCount,
 	}
 
 	mcl, err := mycel.New(mycelConfig)
@@ -212,4 +214,8 @@ func (mc *mycorrizal) RegisterApplication(uniqueIdentifier string) nodosum.Appli
 
 func (mc *mycorrizal) GetApplication(uniqueIdentifier string) nodosum.Application {
 	return mc.nodosum.GetApplication(uniqueIdentifier)
+}
+
+func (mc *mycorrizal) NewBucket(key string) (mycel.Cache, error) {
+	mc.mycel
 }
