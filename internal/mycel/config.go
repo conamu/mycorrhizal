@@ -8,7 +8,8 @@ import (
 )
 
 type Config struct {
-	Ctx     context.Context
-	Logger  *slog.Logger
-	Nodosum *nodosum.Nodosum
+	Ctx          context.Context
+	Logger       *slog.Logger
+	Nodosum      *nodosum.Nodosum
+	ReplicaCount int
 }

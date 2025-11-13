@@ -74,6 +74,7 @@ type Config struct {
 	ClusterTLSCert         *tls.Certificate
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
+	CacheReplicaCount      int
 }
 
 func GetDefaultConfig() *Config {
