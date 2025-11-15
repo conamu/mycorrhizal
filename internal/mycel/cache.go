@@ -11,27 +11,29 @@ type Cache interface {
 	Get(bucket, key string) (any, error)
 	Put(bucket, key string, value any, ttl time.Duration) error
 	Delete(bucket, key string) error
-	PutTtl(bucket, key string, ttl time.Duration) error
+	PutTtl(bucket, key string, ttl time.Duration)
 }
 
-func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) (*lruBucket, error) {
-	return c.lruBuckets.CreateBucket(name, ttl, maxLen)
+func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
+	_, err := c.lruBuckets.CreateBucket(name, ttl, maxLen)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
 	// This means we have the data available locally
 	if n := c.keyVal.Get(bucket + key); n != nil {
-		n.RLock()
-		defer n.RUnlock()
-
 		b, err := c.lruBuckets.GetBucket(bucket)
 		if err != nil {
 			return nil, err
 		}
 
 		if b != nil {
-			c.lruBuckets.RUnlock()
 			b.Push(n)
+			n.RLock()
+			defer n.RUnlock()
 			return n.data, nil
 		}
 

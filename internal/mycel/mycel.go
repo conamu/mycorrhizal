@@ -14,6 +14,7 @@ type Mycel interface {
 	Start() error
 	Ready(timeout time.Duration) error
 	Shutdown()
+	Cache() Cache
 }
 
 type mycel struct {
@@ -107,4 +108,8 @@ func (m *mycel) Shutdown() {
 	m.cancel()
 	m.logger.Debug("mycel waiting on routines to exit...")
 	m.wg.Wait()
+}
+
+func (m *mycel) Cache() Cache {
+	return m.cache
 }
