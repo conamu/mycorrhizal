@@ -14,18 +14,8 @@ type Cache interface {
 	PutTtl(bucket, key string, ttl time.Duration) error
 }
 
-func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
-	c.lruBuckets.Lock()
-	defer c.lruBuckets.Unlock()
-
-	if c.lruBuckets.data[name] != nil {
-		return errors.New("bucket already exists")
-	}
-
-	c.lruBuckets.data[name] = &lruBucket{
-		maxLen: maxLen,
-	}
-	return nil
+func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) (*lruBucket, error) {
+	return c.lruBuckets.CreateBucket(name, ttl, maxLen)
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
@@ -34,7 +24,12 @@ func (c *cache) Get(bucket, key string) (any, error) {
 		n.RLock()
 		defer n.RUnlock()
 
-		if b := c.lruBuckets.GetBucket(bucket); b != nil {
+		b, err := c.lruBuckets.GetBucket(bucket)
+		if err != nil {
+			return nil, err
+		}
+
+		if b != nil {
 			c.lruBuckets.RUnlock()
 			b.Push(n)
 			return n.data, nil
@@ -46,18 +41,46 @@ func (c *cache) Get(bucket, key string) (any, error) {
 }
 
 func (c *cache) Put(bucket, key string, value any, ttl time.Duration) error {
-	//TODO implement me
-	panic("implement me")
+
+	b, err := c.lruBuckets.GetBucket(bucket)
+	if err != nil {
+		return err
+	}
+
+	expiry := time.Time{}
+
+	if ttl != 0 {
+		expiry = time.Now().Add(ttl)
+	}
+
+	n := &node{
+		key:  bucket + key,
+		data: value,
+		ttl:  expiry,
+	}
+
+	c.keyVal.Set(bucket+key, n)
+	b.Push(n)
+	return nil
 }
 
 func (c *cache) Delete(bucket, key string) error {
-	//TODO implement me
-	panic("implement me")
+	b, err := c.lruBuckets.GetBucket(bucket)
+	if err != nil {
+		return err
+	}
+	b.Delete(key)
+	c.keyVal.Delete(bucket + key)
+	return nil
 }
 
-func (c *cache) PutTtl(bucket, key string, ttl time.Duration) error {
-	//TODO implement me
-	panic("implement me")
+func (c *cache) PutTtl(bucket, key string, ttl time.Duration) {
+	n := c.keyVal.Get(bucket + key)
+	n.Lock()
+	defer n.Unlock()
+	n.ttl = time.Now().Add(ttl)
+	c.keyVal.Set(bucket+key, n)
+	return
 }
 
 // shutdown will gracefully mark the node as dead and sign off from the network
