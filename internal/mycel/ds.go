@@ -41,6 +41,7 @@ func (m *mycel) initCache() {
 
 // cache holds references to all nodes and buckets protected by mu
 type cache struct {
+	sync.WaitGroup
 	keyVal           *keyVal
 	lruBuckets       *lruBuckets
 	nodeScoreHashMap *remoteCacheNodeHashMap
@@ -73,8 +74,10 @@ type lruBucket struct {
 }
 
 type node struct {
+	sync.RWMutex
 	next *node
 	prev *node
+	hash string
 	data any
 	ttl  time.Time
 }
@@ -118,4 +121,55 @@ func (m *mycel) getReplicas(key string, replicas int) []replicaNode {
 	})
 
 	return scoredNodes
+}
+
+// LRU DLL Methods
+
+func (l *lruBuckets) GetBucket(name string) *lruBucket {
+	l.RLock()
+	defer l.RUnlock()
+	return l.data[name]
+}
+
+// Push appends or moves the node to the top of the list
+func (l *lruBucket) Push(n *node) {
+	// Since this operation concerns the whole bucket we dont need to lock the individual node but still doing it to be sure.
+	l.Lock()
+	n.Lock()
+	defer l.Unlock()
+	defer n.Unlock()
+
+	if l.head == n {
+		return
+	}
+
+	// if item was between 2 nodes, stitch them together before moving it to the top
+	if n.next != nil && n.prev != nil {
+		prev := n.prev
+		next := n.next
+
+		next.prev = prev
+		prev.next = next
+	}
+
+	if l.head == nil {
+		l.head = n
+		l.tail = n
+	}
+
+	if l.head != nil {
+		l.head.prev = n
+		n.next = l.head
+		l.head = n
+	}
+	n.prev = nil
+	l.len++
+}
+
+// keyVal methods
+
+func (k *keyVal) Get(key string) *node {
+	k.RLock()
+	defer k.RUnlock()
+	return k.data[key]
 }
