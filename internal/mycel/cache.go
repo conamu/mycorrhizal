@@ -23,7 +23,7 @@ func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
-	// This means we have the data available locally
+	// If in local kv cache the data is available locally
 	if n := c.keyVal.Get(bucket + key); n != nil {
 		b, err := c.lruBuckets.GetBucket(bucket)
 		if err != nil {
@@ -63,6 +63,23 @@ func (c *cache) Put(bucket, key string, value any, ttl time.Duration) error {
 
 	c.keyVal.Set(bucket+key, n)
 	b.Push(n)
+
+	// LRU Eviction
+	if b.len > b.maxLen {
+		b.Lock()
+		defer b.Unlock()
+		evictedNode := b.tail
+		evictedNode.Lock()
+		defer evictedNode.Unlock()
+
+		b.tail = evictedNode.prev
+		evictedNode.next = nil
+		evictedNode.prev = nil
+		evictedNode.data = nil
+		c.keyVal.Delete(evictedNode.key)
+		b.len--
+	}
+
 	return nil
 }
 
