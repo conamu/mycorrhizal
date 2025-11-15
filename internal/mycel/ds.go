@@ -164,6 +164,11 @@ func (l *lruBucket) Push(n *node) {
 	defer l.Unlock()
 	defer n.Unlock()
 
+	// If node never had neighbours its new
+	if n.next == nil && n.prev == nil {
+		l.len++
+	}
+
 	if l.head == n {
 		return
 	}
@@ -188,7 +193,6 @@ func (l *lruBucket) Push(n *node) {
 		l.head = n
 	}
 	n.prev = nil
-	l.len++
 }
 
 func (l *lruBucket) Delete(key string) {
