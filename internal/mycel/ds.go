@@ -67,7 +67,7 @@ type remoteCacheNodeHashMap struct {
 
 // lruBucket is a local dll based cache with ttls
 type lruBucket struct {
-	sync.Mutex
+	sync.RWMutex
 	head       *node
 	tail       *node
 	len        int

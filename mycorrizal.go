@@ -17,11 +17,11 @@ import (
 )
 
 type Mycorrizal interface {
-	mycel.Application
 	Start() error
 	Shutdown() error
 	RegisterApplication(uniqueIdentifier string) nodosum.Application
 	GetApplication(uniqueIdentifier string) nodosum.Application
+	Cache() mycel.Cache
 }
 
 type mycorrizal struct {
@@ -216,6 +216,6 @@ func (mc *mycorrizal) GetApplication(uniqueIdentifier string) nodosum.Applicatio
 	return mc.nodosum.GetApplication(uniqueIdentifier)
 }
 
-func (mc *mycorrizal) NewBucket(key string) (mycel.Cache, error) {
-	mc.mycel
+func (mc *mycorrizal) Cache() mycel.Cache {
+	return mc.mycel.Cache()
 }
