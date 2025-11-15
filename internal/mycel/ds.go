@@ -3,6 +3,7 @@ package mycel
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -67,17 +68,18 @@ type remoteCacheNodeHashMap struct {
 // lruBucket is a local dll based cache with ttls
 type lruBucket struct {
 	sync.Mutex
-	head   *node
-	tail   *node
-	len    int
-	maxLen int
+	head       *node
+	tail       *node
+	len        int
+	maxLen     int
+	defaultTtl time.Duration
 }
 
 type node struct {
 	sync.RWMutex
 	next *node
 	prev *node
-	hash string
+	key  string
 	data any
 	ttl  time.Time
 }
@@ -125,10 +127,33 @@ func (m *mycel) getReplicas(key string, replicas int) []replicaNode {
 
 // LRU DLL Methods
 
-func (l *lruBuckets) GetBucket(name string) *lruBucket {
+// GetBucket returns a bucket by name
+func (l *lruBuckets) GetBucket(name string) (*lruBucket, error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.data[name]
+	b := l.data[name]
+	if b == nil {
+		return nil, errors.New("bucket not found")
+	}
+
+	return b, nil
+}
+
+// CreateBucket creates a bucket with name and set ttl and a configured max LRU length
+func (l *lruBuckets) CreateBucket(name string, defaultTtl time.Duration, maxLen int) (*lruBucket, error) {
+	l.Lock()
+	defer l.Unlock()
+
+	if l.data[name] != nil {
+		return nil, errors.New("bucket already exists")
+	}
+
+	l.data[name] = &lruBucket{
+		maxLen:     maxLen,
+		defaultTtl: defaultTtl,
+	}
+
+	return l.data[name], nil
 }
 
 // Push appends or moves the node to the top of the list
@@ -145,8 +170,8 @@ func (l *lruBucket) Push(n *node) {
 
 	// if item was between 2 nodes, stitch them together before moving it to the top
 	if n.next != nil && n.prev != nil {
-		prev := n.prev
 		next := n.next
+		prev := n.prev
 
 		next.prev = prev
 		prev.next = next
@@ -166,10 +191,54 @@ func (l *lruBucket) Push(n *node) {
 	l.len++
 }
 
+func (l *lruBucket) Delete(key string) {
+	l.Lock()
+	defer l.Unlock()
+
+	for range l.len {
+		n := l.head
+		n.RLock()
+		if n.key == key {
+			if n.prev == nil {
+				l.head = n.next
+			}
+			if n.next == nil {
+				l.tail = n.prev
+			}
+
+			if n.next != nil && n.prev != nil {
+				prev := n.prev
+				next := n.next
+
+				next.prev = prev
+				prev.next = next
+			}
+
+			l.len--
+			return
+		}
+		n.RUnlock()
+		n = n.next
+	}
+
+}
+
 // keyVal methods
 
 func (k *keyVal) Get(key string) *node {
 	k.RLock()
 	defer k.RUnlock()
 	return k.data[key]
+}
+
+func (k *keyVal) Set(key string, n *node) {
+	k.Lock()
+	defer k.Unlock()
+	k.data[key] = n
+}
+
+func (k *keyVal) Delete(key string) {
+	k.Lock()
+	defer k.Unlock()
+	delete(k.data, key)
 }
