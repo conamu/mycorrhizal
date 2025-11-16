@@ -164,13 +164,13 @@ func (l *lruBucket) Push(n *node) {
 	defer l.Unlock()
 	defer n.Unlock()
 
+	if l.head == n {
+		return
+	}
+
 	// If node never had neighbours its new
 	if n.next == nil && n.prev == nil {
 		l.len++
-	}
-
-	if l.head == n {
-		return
 	}
 
 	// if item was between 2 nodes, stitch them together before moving it to the top
@@ -180,6 +180,12 @@ func (l *lruBucket) Push(n *node) {
 
 		next.prev = prev
 		prev.next = next
+	}
+
+	// if item is the tail (but not the only node), update tail pointer
+	if n.next == nil && n.prev != nil {
+		l.tail = n.prev
+		n.prev.next = nil
 	}
 
 	if l.head == nil {
@@ -232,7 +238,13 @@ func (l *lruBucket) Delete(key string) {
 				n.prev.next = nil
 			}
 
+			// Clear the deleted node's own pointers
 			n.RUnlock()
+			n.Lock()
+			n.next = nil
+			n.prev = nil
+			n.Unlock()
+
 			l.len--
 			return
 		}

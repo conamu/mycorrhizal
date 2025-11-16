@@ -104,7 +104,7 @@ func (c *cache) Delete(bucket, key string) error {
 	if err != nil {
 		return err
 	}
-	b.Delete(bucket + key)
+	b.Delete(key)
 	c.keyVal.Delete(bucket + key)
 	return nil
 }
