@@ -55,10 +55,21 @@ func (c *cache) Put(bucket, key string, value any, ttl time.Duration) error {
 		expiry = time.Now().Add(ttl)
 	}
 
+	// Check if key already exists - update instead of creating new node
+	if existingNode := c.keyVal.Get(bucket + key); existingNode != nil {
+		existingNode.Lock()
+		existingNode.data = value
+		existingNode.expiresAt = expiry
+		existingNode.Unlock()
+		b.Push(existingNode)
+		return nil
+	}
+
+	// Create new node for new key
 	n := &node{
-		key:  bucket + key,
-		data: value,
-		ttl:  expiry,
+		key:       key,
+		data:      value,
+		expiresAt: expiry,
 	}
 
 	c.keyVal.Set(bucket+key, n)
@@ -83,21 +94,29 @@ func (c *cache) Put(bucket, key string, value any, ttl time.Duration) error {
 	return nil
 }
 
+/*TODO:
+Delete could be optimized to utilize the KV map
+to find the node and stitch the lru instead of finding the node through iteration
+*/
+
 func (c *cache) Delete(bucket, key string) error {
 	b, err := c.lruBuckets.GetBucket(bucket)
 	if err != nil {
 		return err
 	}
-	b.Delete(key)
+	b.Delete(bucket + key)
 	c.keyVal.Delete(bucket + key)
 	return nil
 }
 
 func (c *cache) PutTtl(bucket, key string, ttl time.Duration) {
 	n := c.keyVal.Get(bucket + key)
+	if n == nil {
+		return
+	}
 	n.Lock()
 	defer n.Unlock()
-	n.ttl = time.Now().Add(ttl)
+	n.expiresAt = time.Now().Add(ttl)
 	c.keyVal.Set(bucket+key, n)
 	return
 }

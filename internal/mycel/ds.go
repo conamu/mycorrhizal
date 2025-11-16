@@ -77,11 +77,11 @@ type lruBucket struct {
 
 type node struct {
 	sync.RWMutex
-	next *node
-	prev *node
-	key  string
-	data any
-	ttl  time.Time
+	next      *node
+	prev      *node
+	key       string
+	data      any
+	expiresAt time.Time
 }
 
 /*
@@ -185,6 +185,7 @@ func (l *lruBucket) Push(n *node) {
 	if l.head == nil {
 		l.head = n
 		l.tail = n
+		return
 	}
 
 	if l.head != nil {
@@ -199,17 +200,20 @@ func (l *lruBucket) Delete(key string) {
 	l.Lock()
 	defer l.Unlock()
 
-	for range l.len {
-		n := l.head
+	n := l.head
+	for n != nil {
 		n.RLock()
 		if n.key == key {
+			// Update head if this is the head node
 			if n.prev == nil {
 				l.head = n.next
 			}
+			// Update tail if this is the tail node
 			if n.next == nil {
 				l.tail = n.prev
 			}
 
+			// Stitch together nodes if this is a middle node
 			if n.next != nil && n.prev != nil {
 				prev := n.prev
 				next := n.next
@@ -218,6 +222,17 @@ func (l *lruBucket) Delete(key string) {
 				prev.next = next
 			}
 
+			// Clear pointers for head-only node (not single node)
+			if n.prev == nil && n.next != nil {
+				n.next.prev = nil
+			}
+
+			// Clear pointers for tail-only node (not single node)
+			if n.next == nil && n.prev != nil {
+				n.prev.next = nil
+			}
+
+			n.RUnlock()
 			l.len--
 			return
 		}

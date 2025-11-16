@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/conamu/go-worker"
 	"github.com/conamu/mycorrizal/internal/nodosum"
 )
 
@@ -84,6 +85,7 @@ func (m *mycel) Start() error {
 	}
 	m.logger.Debug("starting mycel")
 	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
+	go worker.NewWorker(m.ctx, "tt-l-evictor", m.wg, m.cache.ttlEvictionWorkerTask, m.logger, 10*time.Second).Start()
 	close(m.readyChan)
 	return nil
 }
