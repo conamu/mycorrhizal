@@ -2,8 +2,12 @@ package mycel
 
 import (
 	"errors"
-	"fmt"
 	"time"
+)
+
+var (
+	ERR_NOT_FOUND = errors.New("not found")
+	ERR_NO_BUCKET = errors.New("bucket not found")
 )
 
 type Cache interface {
@@ -23,23 +27,28 @@ func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
-	// If in local kv cache the data is available locally
-	if n := c.keyVal.Get(bucket + key); n != nil {
-		b, err := c.lruBuckets.GetBucket(bucket)
-		if err != nil {
-			return nil, err
-		}
+	primaryReplicaId := ""
+	c.nodeScoreHashMap.RLock()
+	if id, exists := c.nodeScoreHashMap.data[bucket+key]; exists {
+		c.nodeScoreHashMap.RUnlock()
+		primaryReplicaId = id
+	} else {
+		c.nodeScoreHashMap.RUnlock()
+		// select primary calculated replica
+		scoredNodes := c.getReplicas(bucket + key)
+		primaryReplicaId = scoredNodes[0].id
 
-		if b != nil {
-			b.Push(n)
-			n.RLock()
-			defer n.RUnlock()
-			return n.data, nil
-		}
-
-		return nil, errors.New(fmt.Sprintf("no bucket with name %s", bucket))
+		// store it for future reference
+		c.nodeScoreHashMap.Lock()
+		c.nodeScoreHashMap.data[bucket+key] = scoredNodes[0].id
+		c.nodeScoreHashMap.Unlock()
 	}
-	return nil, errors.New("not found")
+
+	if primaryReplicaId == c.nodeId {
+		return c.getLocal(bucket, key)
+	}
+
+	return c.getRemote(bucket, key)
 }
 
 func (c *cache) Put(bucket, key string, value any, ttl time.Duration) error {

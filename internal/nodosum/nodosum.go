@@ -194,3 +194,7 @@ func (n *Nodosum) Shutdown() {
 	n.logger.Debug("nodosum shutdown waiting on routines to exit...")
 	n.wg.Wait()
 }
+
+func (n *Nodosum) Id() string {
+	return n.nodeId
+}
