@@ -82,7 +82,7 @@ Also affects:
 
 ---
 
-### 3. **Memory Leak in TTL Eviction** (task.go:14)
+### 3. **Memory Leak in TTL Eviction** (task.go:14) - fixed
 
 **Location**: `internal/mycel/task.go`
 
