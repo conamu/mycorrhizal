@@ -84,7 +84,10 @@ func (m *mycel) Start() error {
 		return errors.Join(errors.New("failed to initialize mycel"), err)
 	}
 	m.logger.Debug("starting mycel")
+
 	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
+	m.app.SetReceiveFunc(m.cache.applicationReceiveTask)
+
 	go worker.NewWorker(m.ctx, "tt-l-evictor", m.wg, m.cache.ttlEvictionWorkerTask, m.logger, 10*time.Second).Start()
 	close(m.readyChan)
 	return nil

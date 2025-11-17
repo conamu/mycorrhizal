@@ -1,6 +1,7 @@
 package mycel
 
 import (
+	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -44,4 +45,13 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 	}
 
 	w.Logger.Debug("eviction done")
+}
+
+func (c *cache) applicationReceiveTask(payload []byte) error {
+	req := cacheRequest{}
+	_, err := binary.Decode(payload, binary.LittleEndian, &req)
+	if err != nil {
+
+	}
+	return nil
 }

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/conamu/mycorrizal/internal/nodosum"
 )
 
 /*
@@ -34,6 +36,8 @@ Other allowed interactions:
 
 func (m *mycel) initCache() {
 	m.cache = &cache{
+		nodeId:           m.ndsm.Id(),
+		app:              m.app,
 		keyVal:           &keyVal{data: make(map[string]*node)},
 		lruBuckets:       &lruBuckets{data: make(map[string]*lruBucket)},
 		nodeScoreHashMap: &remoteCacheNodeHashMap{data: make(map[string]string)},
@@ -43,6 +47,8 @@ func (m *mycel) initCache() {
 // cache holds references to all nodes and buckets protected by mu
 type cache struct {
 	sync.WaitGroup
+	nodeId           string
+	app              nodosum.Application
 	keyVal           *keyVal
 	lruBuckets       *lruBuckets
 	nodeScoreHashMap *remoteCacheNodeHashMap
@@ -94,7 +100,7 @@ type replicaNode struct {
 }
 
 // score calculates the score of a node selection for a cache key. Data is written to N nodes with highest scores
-func (m *mycel) score(key, nodeId string) uint64 {
+func (c *cache) score(key, nodeId string) uint64 {
 	h := sha256.New()
 	h.Write([]byte(key))
 	h.Write([]byte(nodeId))
@@ -102,16 +108,13 @@ func (m *mycel) score(key, nodeId string) uint64 {
 	return binary.LittleEndian.Uint64(sum[:8])
 }
 
-// getReplicas calculates N possible replicas for cache key. Returned slice is sorted by highest score.
-func (m *mycel) getReplicas(key string, replicas int) []replicaNode {
-	nodes := m.app.Nodes()
+// getReplicas calculates replicas scores for cache key. Returned slice is sorted by highest score.
+func (c *cache) getReplicas(key string) []replicaNode {
+	nodes := c.app.Nodes()
 	var scoredNodes []replicaNode
 
-	for i, nodeId := range nodes {
-		if i >= replicas {
-			break
-		}
-		nodeScore := m.score(key, nodeId)
+	for _, nodeId := range nodes {
+		nodeScore := c.score(key, nodeId)
 		scoredNodes = append(scoredNodes, replicaNode{
 			id:    nodeId,
 			score: nodeScore,
