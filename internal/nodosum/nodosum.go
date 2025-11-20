@@ -4,13 +4,18 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/rand"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/conamu/go-worker"
+	"github.com/hashicorp/memberlist"
+	"github.com/quic-go/quic-go"
 )
 
 /*
@@ -33,8 +38,12 @@ type Nodosum struct {
 	nodeMeta          *NodeMetaMap
 	ctx               context.Context
 	cancel            context.CancelFunc
+	ml                *memberlist.Memberlist
 	connInit          *connInit
 	listenerTcp       net.Listener
+	quicPort          int
+	quicTransport     *quic.Transport
+	quicConfig        *quic.Config
 	udpConn           *net.UDPConn
 	sharedSecret      string
 	logger            *slog.Logger
@@ -63,6 +72,17 @@ type connInit struct {
 func New(cfg *Config) (*Nodosum, error) {
 	var tlsConf *tls.Config
 
+	cfg.MemberlistConfig.AdvertiseAddr = "127.0.0.1"
+	cfg.MemberlistConfig.BindAddr = "127.0.0.1"
+	cfg.MemberlistConfig.LogOutput = os.Stdout
+	cfg.MemberlistConfig.SecretKey = []byte(cfg.SharedSecret)
+	cfg.MemberlistConfig.Name = cfg.NodeId
+
+	ml, err := memberlist.Create(cfg.MemberlistConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	tcpLocalAddr := &net.TCPAddr{Port: cfg.ListenPort}
 	addrString := tcpLocalAddr.String()
 
@@ -72,6 +92,7 @@ func New(cfg *Config) (*Nodosum, error) {
 			ServerName:   cfg.TlsHostName,
 			RootCAs:      cfg.TlsCACert,
 			Certificates: []tls.Certificate{*cfg.TlsCert},
+			NextProtos:   []string{"mycorrizal"},
 		}
 	}
 	listenerTcp, err := net.Listen("tcp", addrString)
@@ -82,18 +103,36 @@ func New(cfg *Config) (*Nodosum, error) {
 	udpLocalAddr := &net.UDPAddr{Port: cfg.ListenPort}
 	udpConn, err := net.ListenUDP("udp", udpLocalAddr)
 
+	localQuicAddr, err := net.ListenUDP("udp", &net.UDPAddr{Port: cfg.QuicPort})
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(cfg.Ctx)
+
+	quicTransport := &quic.Transport{
+		Conn:                             localQuicAddr,
+		DisableVersionNegotiationPackets: true,
+	}
+
+	quicConf := &quic.Config{
+		Versions: []quic.Version{quic.Version2},
+	}
 
 	n := &Nodosum{
 		nodeId:   cfg.NodeId,
 		nodeMeta: cfg.NodeAddrs,
 		ctx:      ctx,
 		cancel:   cancel,
+		ml:       ml,
 		connInit: &connInit{
 			mu:     sync.Mutex{},
 			val:    rand.Uint32(),
 			tokens: make(map[string]string),
 		},
+		quicPort:              cfg.QuicPort,
+		quicTransport:         quicTransport,
+		quicConfig:            quicConf,
 		listenerTcp:           listenerTcp,
 		udpConn:               udpConn,
 		sharedSecret:          cfg.SharedSecret,
@@ -111,6 +150,10 @@ func New(cfg *Config) (*Nodosum, error) {
 		readyChan:             make(chan any),
 	}
 
+	cfg.MemberlistConfig.Events = &Delegate{
+		Nodosum: n,
+	}
+
 	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*3)
 	n.nodeAppSyncWorker = nodeAppSync
 
@@ -118,12 +161,6 @@ func New(cfg *Config) (*Nodosum, error) {
 }
 
 func (n *Nodosum) Start() error {
-
-	x := len([]byte(n.sharedSecret))
-
-	if x != 64 {
-		return errors.New("invalid shared secret, must be 64 bytes")
-	}
 
 	n.startMultiplexer()
 
@@ -137,35 +174,37 @@ func (n *Nodosum) Start() error {
 			n.listenUdp()
 		},
 	)
+	n.wg.Go(
+		func() {
+			n.listenQuic()
+		})
+
+	n.nodeMeta.Lock()
+	filteredNodes := n.filterNodes(n.nodeMeta.IPs)
+	n.nodeMeta.Unlock()
+
+	nodesConnected, err := n.ml.Join(filteredNodes)
+	if err != nil {
+		n.logger.Error("joining initial seed nodes failed", err)
+	}
+	n.logger.Debug(fmt.Sprintf("%d nodes joined", nodesConnected))
 
 	go n.nodeAppSyncWorker.Start()
 
-	packet := n.encodeHandshakePacket(&handshakeUdpPacket{
-		Version:  1,
-		Type:     HELLO,
-		ConnInit: n.connInit.val,
-		Id:       n.nodeId,
-		Secret:   n.sharedSecret,
-	})
-
-	n.nodeMeta.Lock()
-	for _, ip := range n.nodeMeta.IPs {
-
-		a, err := net.ResolveUDPAddr("udp", ip)
-		if err != nil {
-			n.logger.Error("failed to resolve udp addr", "err", err)
-			continue
-		}
-
-		_, err = n.udpConn.WriteToUDP(packet, a)
-		if err != nil {
-			n.logger.Error("failed to write udp packet", "err", err)
-		}
-	}
-	n.nodeMeta.Unlock()
 	close(n.readyChan)
 
 	return nil
+}
+
+func (n *Nodosum) filterNodes(ips []string) []string {
+	filtered := []string{}
+	for _, ip := range ips {
+		localAddr := n.ml.LocalNode().Addr.String() + ":" + strconv.Itoa(int(n.ml.LocalNode().Port))
+		if ip != localAddr {
+			filtered = append(filtered, ip)
+		}
+	}
+	return filtered
 }
 
 func (n *Nodosum) Ready(timeout time.Duration) error {
@@ -184,6 +223,10 @@ func (n *Nodosum) Ready(timeout time.Duration) error {
 }
 
 func (n *Nodosum) Shutdown() {
+	err := n.ml.Leave(30 * time.Second)
+	if err != nil {
+		n.logger.Error("ml failed to leave properly", "err", err)
+	}
 	n.nodeAppSyncWorker.Stop()
 	n.connections.Range(func(k, v interface{}) bool {
 		id := k.(string)

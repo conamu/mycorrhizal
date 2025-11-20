@@ -9,4 +9,5 @@ func (c *cache) getRemote(bucket, key string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return target, nil
 }

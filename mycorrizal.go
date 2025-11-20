@@ -117,6 +117,8 @@ func New(cfg *Config) (Mycorrizal, error) {
 		TlsCert:                cfg.ClusterTLSCert,
 		MultiplexerBufferSize:  cfg.MultiplexerBufferSize,
 		MultiplexerWorkerCount: cfg.MultiplexerWorkerCount,
+		MemberlistConfig:       cfg.MemberlistConfig,
+		QuicPort:               cfg.QuicPort,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)

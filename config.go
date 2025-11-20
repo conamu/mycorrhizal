@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"time"
+
+	"github.com/hashicorp/memberlist"
 )
 
 const (
@@ -75,6 +77,8 @@ type Config struct {
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 	CacheReplicaCount      int
+	MemberlistConfig       *memberlist.Config
+	QuicPort               int
 }
 
 func GetDefaultConfig() *Config {
@@ -91,5 +95,6 @@ func GetDefaultConfig() *Config {
 		HandshakeTimeout:       2 * time.Second,
 		MultiplexerBufferSize:  1024,
 		MultiplexerWorkerCount: 1,
+		MemberlistConfig:       memberlist.DefaultLocalConfig(),
 	}
 }

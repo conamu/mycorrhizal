@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/memberlist"
 )
 
 type Config struct {
@@ -24,4 +26,6 @@ type Config struct {
 	TlsCert                *tls.Certificate
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
+	MemberlistConfig       *memberlist.Config
+	QuicPort               int
 }

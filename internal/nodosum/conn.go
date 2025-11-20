@@ -9,7 +9,48 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/quic-go/quic-go"
 )
+
+func (n *Nodosum) listenQuic() {
+	ln, err := n.quicTransport.Listen(n.tlsConfig, n.quicConfig)
+	if err != nil {
+		n.logger.Error(fmt.Sprintf("error listening for quic connections: %s", err.Error()))
+	}
+
+	n.wg.Go(func() {
+		<-n.ctx.Done()
+		err := ln.Close()
+		if err != nil {
+			n.logger.Error(fmt.Sprintf("error closing quic listener: %s", err.Error()))
+		}
+		n.logger.Info(fmt.Sprintf("quic listener closed"))
+	})
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			n.logger.Debug("quic listener accept loop stopped")
+			return
+		default:
+			conn, err := ln.Accept(n.ctx)
+			if err != nil {
+				n.logger.Error(fmt.Sprintf("error accepting quic connection: %s", err.Error()))
+			}
+			go n.handleQuicConn(conn)
+		}
+	}
+
+}
+
+func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
+	time.Sleep(5 * time.Second)
+	err := conn.CloseWithError(0, "goodbye")
+	if err != nil {
+		n.logger.Error(fmt.Sprintf("error handling quic connection: %s", err.Error()))
+	}
+}
 
 func (n *Nodosum) listenUdp() {
 	n.wg.Go(
