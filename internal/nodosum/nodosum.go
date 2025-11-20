@@ -44,6 +44,7 @@ type Nodosum struct {
 	quicPort          int
 	quicTransport     *quic.Transport
 	quicConfig        *quic.Config
+	quicConns         *quicConns
 	udpConn           *net.UDPConn
 	sharedSecret      string
 	logger            *slog.Logger
@@ -63,6 +64,10 @@ type Nodosum struct {
 	readyChan             chan any
 }
 
+type quicConns struct {
+	sync.RWMutex
+	conns map[string]*quic.Conn
+}
 type connInit struct {
 	mu     sync.Mutex
 	val    uint32
@@ -133,6 +138,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		quicPort:              cfg.QuicPort,
 		quicTransport:         quicTransport,
 		quicConfig:            quicConf,
+		quicConns:             &quicConns{conns: make(map[string]*quic.Conn)},
 		listenerTcp:           listenerTcp,
 		udpConn:               udpConn,
 		sharedSecret:          cfg.SharedSecret,
