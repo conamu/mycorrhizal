@@ -115,6 +115,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		TlsHostName:            cfg.ClusterTLSHostName,
 		TlsCACert:              cfg.ClusterTLSCACert,
 		TlsCert:                cfg.ClusterTLSCert,
+		OnePasswordToken:       cfg.OnePassToken,
 		MultiplexerBufferSize:  cfg.MultiplexerBufferSize,
 		MultiplexerWorkerCount: cfg.MultiplexerWorkerCount,
 		MemberlistConfig:       cfg.MemberlistConfig,

@@ -72,8 +72,9 @@ type Config struct {
 	HandshakeTimeout       time.Duration
 	ClusterTLSEnabled      bool
 	ClusterTLSHostName     string
-	ClusterTLSCACert       *x509.CertPool
+	ClusterTLSCACert       *x509.Certificate
 	ClusterTLSCert         *tls.Certificate
+	OnePassToken           string
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 	CacheReplicaCount      int

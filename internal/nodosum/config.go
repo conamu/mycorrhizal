@@ -2,6 +2,7 @@ package nodosum
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"log/slog"
@@ -22,8 +23,10 @@ type Config struct {
 	Wg                     *sync.WaitGroup
 	TlsEnabled             bool
 	TlsHostName            string
-	TlsCACert              *x509.CertPool
+	TlsCACert              *x509.Certificate
+	TlsCAKey               *rsa.PrivateKey
 	TlsCert                *tls.Certificate
+	OnePasswordToken       string
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 	MemberlistConfig       *memberlist.Config

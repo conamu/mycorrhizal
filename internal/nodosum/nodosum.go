@@ -3,6 +3,7 @@ package nodosum
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/1password/onepassword-sdk-go"
 	"github.com/conamu/go-worker"
 	"github.com/hashicorp/memberlist"
 	"github.com/quic-go/quic-go"
@@ -38,6 +40,7 @@ type Nodosum struct {
 	nodeMeta          *NodeMetaMap
 	ctx               context.Context
 	cancel            context.CancelFunc
+	onePasswordClient *onepassword.Client
 	ml                *memberlist.Memberlist
 	connInit          *connInit
 	listenerTcp       net.Listener
@@ -88,18 +91,17 @@ func New(cfg *Config) (*Nodosum, error) {
 		return nil, err
 	}
 
+	onePassClient, err := onepassword.NewClient(cfg.Ctx,
+		onepassword.WithServiceAccountToken(cfg.OnePasswordToken),
+		onepassword.WithIntegrationInfo("Mycorrizal auto Cert", "v1.0.0"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	tcpLocalAddr := &net.TCPAddr{Port: cfg.ListenPort}
 	addrString := tcpLocalAddr.String()
 
-	if cfg.TlsEnabled {
-		cfg.Logger.Debug("running with TLS enabled")
-		tlsConf = &tls.Config{
-			ServerName:   cfg.TlsHostName,
-			RootCAs:      cfg.TlsCACert,
-			Certificates: []tls.Certificate{*cfg.TlsCert},
-			NextProtos:   []string{"mycorrizal"},
-		}
-	}
 	listenerTcp, err := net.Listen("tcp", addrString)
 	if err != nil {
 		return nil, err
@@ -135,6 +137,7 @@ func New(cfg *Config) (*Nodosum, error) {
 			val:    rand.Uint32(),
 			tokens: make(map[string]string),
 		},
+		onePasswordClient:     onePassClient,
 		quicPort:              cfg.QuicPort,
 		quicTransport:         quicTransport,
 		quicConfig:            quicConf,
@@ -158,6 +161,23 @@ func New(cfg *Config) (*Nodosum, error) {
 
 	cfg.MemberlistConfig.Events = &Delegate{
 		Nodosum: n,
+	}
+
+	nodeCert, caCert, err := n.generateNodeCert()
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.TlsEnabled {
+		ca := x509.NewCertPool()
+		ca.AddCert(caCert)
+		cfg.Logger.Debug("running with TLS enabled")
+		tlsConf = &tls.Config{
+			ServerName:   cfg.NodeId,
+			RootCAs:      ca,
+			Certificates: []tls.Certificate{*nodeCert},
+			NextProtos:   []string{"mycorrizal"},
+		}
 	}
 
 	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*3)
