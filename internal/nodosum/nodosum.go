@@ -81,8 +81,6 @@ type connInit struct {
 }
 
 func New(cfg *Config) (*Nodosum, error) {
-	var tlsConf *tls.Config
-
 	cfg.MemberlistConfig.AdvertiseAddr = "127.0.0.1"
 	cfg.MemberlistConfig.BindAddr = "127.0.0.1"
 	cfg.MemberlistConfig.LogOutput = os.Stdout
@@ -155,7 +153,6 @@ func New(cfg *Config) (*Nodosum, error) {
 		globalWriteChannel:    make(chan any, cfg.MultiplexerBufferSize),
 		wg:                    cfg.Wg,
 		handshakeTimeout:      cfg.HandshakeTimeout,
-		tlsConfig:             tlsConf,
 		tlsCaCert:             cfg.TlsCACert,
 		tlsCaKey:              cfg.TlsCAKey,
 		multiplexerBufferSize: cfg.MultiplexerBufferSize,
@@ -175,7 +172,7 @@ func New(cfg *Config) (*Nodosum, error) {
 	// Memberlist and Quic will only work with TLS. This library enforces the user to use TLS.
 	ca := x509.NewCertPool()
 	ca.AddCert(caCert)
-	tlsConf = &tls.Config{
+	n.tlsConfig = &tls.Config{
 		ServerName:   cfg.NodeId,
 		RootCAs:      ca,
 		Certificates: []tls.Certificate{*nodeCert},
