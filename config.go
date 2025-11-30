@@ -2,6 +2,7 @@ package mycorrizal
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"log/slog"
@@ -69,12 +70,15 @@ type Config struct {
 
 		Default: 2 seconds
 	*/
-	HandshakeTimeout       time.Duration
-	ClusterTLSEnabled      bool
-	ClusterTLSHostName     string
-	ClusterTLSCACert       *x509.Certificate
-	ClusterTLSCert         *tls.Certificate
-	OnePassToken           string
+	HandshakeTimeout   time.Duration
+	ClusterTLSEnabled  bool
+	ClusterTLSHostName string
+	ClusterTLSCACert   *x509.Certificate
+	ClusterTLSCert     *tls.Certificate
+	OnePassToken       string
+	// CaCert will be used with higher priority instead of One Password if CaCert and CaKey are filled.
+	CaCert                 *x509.Certificate
+	CaKey                  *rsa.PrivateKey
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 	CacheReplicaCount      int

@@ -63,14 +63,24 @@ func (n *Nodosum) getFileFromOnePassword(ctx context.Context, id string) ([]byte
 }
 
 func (n *Nodosum) generateNodeCert(additionalIPs ...net.IP) (*tls.Certificate, *x509.Certificate, error) {
-	caKey, err := n.getCaKey()
-	if err != nil {
-		return nil, nil, err
-	}
 
-	caCert, err := n.getCaCert()
-	if err != nil {
-		return nil, nil, err
+	var caCert *x509.Certificate
+	var caKey *rsa.PrivateKey
+	var err error
+
+	if n.tlsCaKey == nil || n.tlsCaCert == nil {
+		caKey, err = n.getCaKey()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		caCert, err = n.getCaCert()
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		caCert = n.tlsCaCert
+		caKey = n.tlsCaKey
 	}
 
 	// Generate private key for this node

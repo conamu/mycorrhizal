@@ -3,7 +3,6 @@ package nodosum
 import (
 	"context"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"log/slog"
 	"sync"
@@ -21,11 +20,9 @@ type Config struct {
 	HandshakeTimeout       time.Duration
 	Logger                 *slog.Logger
 	Wg                     *sync.WaitGroup
-	TlsEnabled             bool
 	TlsHostName            string
 	TlsCACert              *x509.Certificate
 	TlsCAKey               *rsa.PrivateKey
-	TlsCert                *tls.Certificate
 	OnePasswordToken       string
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int

@@ -2,6 +2,7 @@ package nodosum
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -62,6 +63,8 @@ type Nodosum struct {
 	handshakeTimeout      time.Duration
 	tlsEnabled            bool
 	tlsConfig             *tls.Config
+	tlsCaCert             *x509.Certificate
+	tlsCaKey              *rsa.PrivateKey
 	multiplexerBufferSize int
 	muxWorkerCount        int
 	readyChan             chan any
@@ -152,8 +155,9 @@ func New(cfg *Config) (*Nodosum, error) {
 		globalWriteChannel:    make(chan any, cfg.MultiplexerBufferSize),
 		wg:                    cfg.Wg,
 		handshakeTimeout:      cfg.HandshakeTimeout,
-		tlsEnabled:            cfg.TlsEnabled,
 		tlsConfig:             tlsConf,
+		tlsCaCert:             cfg.TlsCACert,
+		tlsCaKey:              cfg.TlsCAKey,
 		multiplexerBufferSize: cfg.MultiplexerBufferSize,
 		muxWorkerCount:        cfg.MultiplexerWorkerCount,
 		readyChan:             make(chan any),
@@ -168,16 +172,14 @@ func New(cfg *Config) (*Nodosum, error) {
 		return nil, err
 	}
 
-	if cfg.TlsEnabled {
-		ca := x509.NewCertPool()
-		ca.AddCert(caCert)
-		cfg.Logger.Debug("running with TLS enabled")
-		tlsConf = &tls.Config{
-			ServerName:   cfg.NodeId,
-			RootCAs:      ca,
-			Certificates: []tls.Certificate{*nodeCert},
-			NextProtos:   []string{"mycorrizal"},
-		}
+	// Memberlist and Quic will only work with TLS. This library enforces the user to use TLS.
+	ca := x509.NewCertPool()
+	ca.AddCert(caCert)
+	tlsConf = &tls.Config{
+		ServerName:   cfg.NodeId,
+		RootCAs:      ca,
+		Certificates: []tls.Certificate{*nodeCert},
+		NextProtos:   []string{"mycorrizal"},
 	}
 
 	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*3)
