@@ -45,11 +45,46 @@ func (n *Nodosum) listenQuic() {
 }
 
 func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
-	time.Sleep(5 * time.Second)
-	err := conn.CloseWithError(0, "goodbye")
-	if err != nil {
-		n.logger.Error(fmt.Sprintf("error handling quic connection: %s", err.Error()))
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+			stream, err := conn.AcceptStream(n.ctx)
+			if err != nil {
+				n.logger.Error(fmt.Sprintf("error accepting quic stream: %s", err.Error()))
+			}
+
+			go n.handleStream(stream)
+		}
 	}
+}
+
+func (n *Nodosum) handleStream(stream *quic.Stream) {
+
+	if stream == nil {
+		return
+	}
+
+	frameType := make([]byte, 1)
+
+	_, err := io.ReadFull(stream, frameType)
+	if err != nil {
+		n.logger.Error(fmt.Sprintf("error reading quic frame type: %s", err.Error()))
+	}
+
+	nodeId, appId, streamName, err := decodeStreamInit(stream)
+	if err != nil {
+		n.logger.Error(fmt.Sprintf("error decoding quic initial frame: %s", err.Error()))
+	}
+
+	key := fmt.Sprintf("%s:%s:%s", nodeId, appId, streamName)
+
+	n.quicApplicationStreams.Lock()
+	n.quicApplicationStreams.streams[key] = stream
+	n.quicApplicationStreams.Unlock()
+
+	n.logger.Debug(fmt.Sprintf("Registered stream, %s, %s, %s", nodeId, appId, streamName))
 }
 
 func (n *Nodosum) listenUdp() {

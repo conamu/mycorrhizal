@@ -37,24 +37,25 @@ SCOPE
 */
 
 type Nodosum struct {
-	nodeId            string
-	nodeMeta          *NodeMetaMap
-	ctx               context.Context
-	cancel            context.CancelFunc
-	onePasswordClient *onepassword.Client
-	ml                *memberlist.Memberlist
-	connInit          *connInit
-	listenerTcp       net.Listener
-	quicPort          int
-	quicTransport     *quic.Transport
-	quicConfig        *quic.Config
-	quicConns         *quicConns
-	udpConn           *net.UDPConn
-	sharedSecret      string
-	logger            *slog.Logger
-	connections       *sync.Map
-	applications      *sync.Map
-	nodeAppSyncWorker *worker.Worker
+	nodeId                 string
+	nodeMeta               *NodeMetaMap
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	onePasswordClient      *onepassword.Client
+	ml                     *memberlist.Memberlist
+	connInit               *connInit
+	listenerTcp            net.Listener
+	quicPort               int
+	quicTransport          *quic.Transport
+	quicConfig             *quic.Config
+	quicConns              *quicConns
+	quicApplicationStreams *quicApplicationStreams
+	udpConn                *net.UDPConn
+	sharedSecret           string
+	logger                 *slog.Logger
+	connections            *sync.Map
+	applications           *sync.Map
+	nodeAppSyncWorker      *worker.Worker
 	// globalReadChannel transfers all incoming packets from connections to the multiplexer
 	globalReadChannel chan any
 	// globalWriteChannel transfers all outgoing packets from applications to the multiplexer
@@ -74,6 +75,12 @@ type quicConns struct {
 	sync.RWMutex
 	conns map[string]*quic.Conn
 }
+
+type quicApplicationStreams struct {
+	sync.RWMutex
+	streams map[string]*quic.Stream
+}
+
 type connInit struct {
 	mu     sync.Mutex
 	val    uint32
@@ -138,26 +145,27 @@ func New(cfg *Config) (*Nodosum, error) {
 			val:    rand.Uint32(),
 			tokens: make(map[string]string),
 		},
-		onePasswordClient:     onePassClient,
-		quicPort:              cfg.QuicPort,
-		quicTransport:         quicTransport,
-		quicConfig:            quicConf,
-		quicConns:             &quicConns{conns: make(map[string]*quic.Conn)},
-		listenerTcp:           listenerTcp,
-		udpConn:               udpConn,
-		sharedSecret:          cfg.SharedSecret,
-		logger:                cfg.Logger,
-		connections:           &sync.Map{},
-		applications:          &sync.Map{},
-		globalReadChannel:     make(chan any, cfg.MultiplexerBufferSize),
-		globalWriteChannel:    make(chan any, cfg.MultiplexerBufferSize),
-		wg:                    cfg.Wg,
-		handshakeTimeout:      cfg.HandshakeTimeout,
-		tlsCaCert:             cfg.TlsCACert,
-		tlsCaKey:              cfg.TlsCAKey,
-		multiplexerBufferSize: cfg.MultiplexerBufferSize,
-		muxWorkerCount:        cfg.MultiplexerWorkerCount,
-		readyChan:             make(chan any),
+		onePasswordClient:      onePassClient,
+		quicPort:               cfg.QuicPort,
+		quicTransport:          quicTransport,
+		quicConfig:             quicConf,
+		quicConns:              &quicConns{conns: make(map[string]*quic.Conn)},
+		quicApplicationStreams: &quicApplicationStreams{streams: make(map[string]*quic.Stream)},
+		listenerTcp:            listenerTcp,
+		udpConn:                udpConn,
+		sharedSecret:           cfg.SharedSecret,
+		logger:                 cfg.Logger,
+		connections:            &sync.Map{},
+		applications:           &sync.Map{},
+		globalReadChannel:      make(chan any, cfg.MultiplexerBufferSize),
+		globalWriteChannel:     make(chan any, cfg.MultiplexerBufferSize),
+		wg:                     cfg.Wg,
+		handshakeTimeout:       cfg.HandshakeTimeout,
+		tlsCaCert:              cfg.TlsCACert,
+		tlsCaKey:               cfg.TlsCAKey,
+		multiplexerBufferSize:  cfg.MultiplexerBufferSize,
+		muxWorkerCount:         cfg.MultiplexerWorkerCount,
+		readyChan:              make(chan any),
 	}
 
 	cfg.MemberlistConfig.Events = &Delegate{

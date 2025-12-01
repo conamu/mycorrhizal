@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/conamu/go-worker"
+	"github.com/quic-go/quic-go"
 )
 
 type nodeConn struct {
@@ -34,6 +35,43 @@ type NodeMeta struct {
 	ConnectPort string
 	ID          string
 	alive       bool
+}
+
+func (n *Nodosum) getOrCreateQuicStream(nodeId, app, name string) (*quic.Stream, error) {
+	key := fmt.Sprintf("%s:%s:%s", nodeId, app, name)
+
+	n.quicApplicationStreams.RLock()
+	if stream, ok := n.quicApplicationStreams.streams[key]; ok {
+		n.quicApplicationStreams.RUnlock()
+		return stream, nil
+	}
+	n.quicApplicationStreams.RUnlock()
+
+	n.quicConns.RLock()
+	if conn, ok := n.quicConns.conns[nodeId]; ok {
+		n.quicConns.RUnlock()
+
+		stream, err := conn.OpenStreamSync(n.ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		streamInitFrame := encodeStreamInit(nodeId, app, name)
+		b, err := stream.Write(streamInitFrame)
+		if err != nil {
+			n.logger.Error(fmt.Sprintf("error writing initial quic stream: %s", err.Error()))
+		}
+		if b != len(streamInitFrame) {
+			n.logger.Warn(fmt.Sprintf("initial quic stream written bytes wrong, expected %d, got %d", len(streamInitFrame), b))
+		}
+
+		n.quicApplicationStreams.Lock()
+		n.quicApplicationStreams.streams[key] = stream
+		n.quicApplicationStreams.Unlock()
+		return stream, nil
+	}
+
+	return nil, errors.New(fmt.Sprintf("quic connection to node %s could not be found, not creating stream for key %s", nodeId, key))
 }
 
 func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
