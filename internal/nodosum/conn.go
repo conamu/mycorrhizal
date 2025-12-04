@@ -38,6 +38,7 @@ func (n *Nodosum) listenQuic() {
 			conn, err := ln.Accept(n.ctx)
 			if err != nil {
 				n.logger.Error(fmt.Sprintf("error accepting quic connection: %s", err.Error()))
+				continue
 			}
 			go n.handleQuicConn(conn)
 		}
@@ -60,7 +61,7 @@ func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
 				if isConnectionClosed(err) {
 					n.logger.Debug("connection closed, stopping accept loop",
 						"nodeID", nodeID, "error", err.Error())
-					return // ✅ Exit loop
+					return
 				}
 
 				// Temporary error - log and continue

@@ -157,12 +157,8 @@ func (mc *mycorrizal) Start() error {
 	mc.logger.Info("mycorrizal starting")
 	wg := &sync.WaitGroup{}
 	wg.Go(func() {
-		err := mc.nodosum.Start()
-		if err != nil {
-			mc.logger.Error(err.Error())
-			mc.cancel()
-		}
-		err = mc.nodosum.Ready(time.Second * 30)
+		mc.nodosum.Start()
+		err := mc.nodosum.Ready(time.Second * 30)
 		if err != nil {
 			mc.logger.Error(err.Error())
 			mc.cancel()

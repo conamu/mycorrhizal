@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/rand"
 	"net"
@@ -41,6 +40,7 @@ type Nodosum struct {
 	nodeMeta               *NodeMetaMap
 	ctx                    context.Context
 	cancel                 context.CancelFunc
+	startOnce              sync.Once
 	onePasswordClient      *onepassword.Client
 	ml                     *memberlist.Memberlist
 	connInit               *connInit
@@ -93,6 +93,7 @@ func New(cfg *Config) (*Nodosum, error) {
 	cfg.MemberlistConfig.LogOutput = os.Stdout
 	cfg.MemberlistConfig.SecretKey = []byte(cfg.SharedSecret)
 	cfg.MemberlistConfig.Name = cfg.NodeId
+	cfg.MemberlistConfig.TCPTimeout = time.Second * 3
 
 	ml, err := memberlist.Create(cfg.MemberlistConfig)
 	if err != nil {
@@ -193,41 +194,41 @@ func New(cfg *Config) (*Nodosum, error) {
 	return n, nil
 }
 
-func (n *Nodosum) Start() error {
+func (n *Nodosum) Start() {
+	defer func() {
+		if r := recover(); r != nil {
+			n.logger.Error("panic in Start() recovered", "panic", r)
+			close(n.readyChan) // Still signal (though with error state)
+			panic(r)           // Re-panic after cleanup
+		}
+	}()
 
-	/*n.startMultiplexer()
-
-	n.wg.Go(
-		func() {
-			n.listenTcp()
-		},
-	)
-	n.wg.Go(
-		func() {
-			n.listenUdp()
-		},
-	)*/
-
-	n.wg.Go(
-		func() {
+	n.startOnce.Do(func() {
+		n.logger.Debug("Start: launching QUIC listener")
+		n.wg.Go(func() {
 			n.listenQuic()
 		})
 
-	n.nodeMeta.Lock()
-	filteredNodes := n.filterNodes(n.nodeMeta.IPs)
-	n.nodeMeta.Unlock()
+		n.logger.Debug("Start: filtering nodes")
+		n.nodeMeta.Lock()
+		filteredNodes := n.filterNodes(n.nodeMeta.IPs)
+		n.nodeMeta.Unlock()
+		n.logger.Debug("Start: filtered nodes", "count", len(filteredNodes), "nodes", filteredNodes)
 
-	nodesConnected, err := n.ml.Join(filteredNodes)
-	if err != nil {
-		n.logger.Error("joining initial seed nodes failed", err)
-	}
-	n.logger.Debug(fmt.Sprintf("%d nodes joined", nodesConnected))
+		n.logger.Debug("Start: calling memberlist.Join()")
+		nodesConnected, err := n.ml.Join(filteredNodes)
+		if err != nil {
+			n.logger.Error("joining initial seed nodes failed", err)
+		}
+		n.logger.Debug("Start: Join() completed", "nodesConnected", nodesConnected)
 
-	go n.nodeAppSyncWorker.Start()
+		n.logger.Debug("Start: starting nodeAppSyncWorker")
+		go n.nodeAppSyncWorker.Start()
 
-	close(n.readyChan)
-
-	return nil
+		n.logger.Debug("Start: closing readyChan")
+		close(n.readyChan)
+		n.logger.Debug("Start: completed successfully")
+	})
 }
 
 func (n *Nodosum) filterNodes(ips []string) []string {
