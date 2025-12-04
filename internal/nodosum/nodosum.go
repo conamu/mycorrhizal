@@ -195,7 +195,7 @@ func New(cfg *Config) (*Nodosum, error) {
 
 func (n *Nodosum) Start() error {
 
-	n.startMultiplexer()
+	/*n.startMultiplexer()
 
 	n.wg.Go(
 		func() {
@@ -206,7 +206,8 @@ func (n *Nodosum) Start() error {
 		func() {
 			n.listenUdp()
 		},
-	)
+	)*/
+
 	n.wg.Go(
 		func() {
 			n.listenQuic()

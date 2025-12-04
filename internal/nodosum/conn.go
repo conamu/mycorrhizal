@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -45,14 +46,27 @@ func (n *Nodosum) listenQuic() {
 }
 
 func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
+	nodeID := conn.ConnectionState().TLS.ServerName
+
 	for {
 		select {
 		case <-n.ctx.Done():
+			n.logger.Debug("handleQuicConn exiting - context cancelled", "nodeID", nodeID)
 			return
 		default:
 			stream, err := conn.AcceptStream(n.ctx)
 			if err != nil {
-				n.logger.Error(fmt.Sprintf("error accepting quic stream: %s", err.Error()))
+				// Check if connection is closed
+				if isConnectionClosed(err) {
+					n.logger.Debug("connection closed, stopping accept loop",
+						"nodeID", nodeID, "error", err.Error())
+					return // ✅ Exit loop
+				}
+
+				// Temporary error - log and continue
+				n.logger.Warn("temporary error accepting stream",
+					"nodeID", nodeID, "error", err.Error())
+				continue
 			}
 
 			go n.handleStream(stream)
@@ -405,4 +419,22 @@ func (n *Nodosum) handleUdpError(err error) error {
 		return nil
 	}
 	return err
+}
+
+func isConnectionClosed(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// QUIC-specific errors
+	var appErr *quic.ApplicationError
+	var idleErr *quic.IdleTimeoutError
+	var statelessResetErr *quic.StatelessResetError
+
+	return errors.As(err, &appErr) ||
+		errors.As(err, &idleErr) ||
+		errors.As(err, &statelessResetErr) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, net.ErrClosed) ||
+		strings.Contains(err.Error(), "timeout: no recent network activity")
 }
