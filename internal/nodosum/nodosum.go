@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/1password/onepassword-sdk-go"
-	"github.com/conamu/go-worker"
 	"github.com/hashicorp/memberlist"
 	"github.com/quic-go/quic-go"
 )
@@ -53,17 +52,11 @@ type Nodosum struct {
 	udpConn                *net.UDPConn
 	sharedSecret           string
 	logger                 *slog.Logger
-	connections            *sync.Map
 	applications           *sync.Map
-	nodeAppSyncWorker      *worker.Worker
 	wg                     *sync.WaitGroup
-	handshakeTimeout       time.Duration
-	tlsEnabled             bool
 	tlsConfig              *tls.Config
 	tlsCaCert              *x509.Certificate
 	tlsCaKey               *rsa.PrivateKey
-	multiplexerBufferSize  int
-	muxWorkerCount         int
 	readyChan              chan any
 }
 
@@ -152,14 +145,10 @@ func New(cfg *Config) (*Nodosum, error) {
 		udpConn:                udpConn,
 		sharedSecret:           cfg.SharedSecret,
 		logger:                 cfg.Logger,
-		connections:            &sync.Map{},
 		applications:           &sync.Map{},
 		wg:                     cfg.Wg,
-		handshakeTimeout:       cfg.HandshakeTimeout,
 		tlsCaCert:              cfg.TlsCACert,
 		tlsCaKey:               cfg.TlsCAKey,
-		multiplexerBufferSize:  cfg.MultiplexerBufferSize,
-		muxWorkerCount:         cfg.MultiplexerWorkerCount,
 		readyChan:              make(chan any),
 	}
 
@@ -182,8 +171,9 @@ func New(cfg *Config) (*Nodosum, error) {
 		NextProtos:   []string{"mycorrizal"},
 	}
 
-	nodeAppSync := worker.NewWorker(cfg.Ctx, "node-app-sync", cfg.Wg, n.nodeAppSyncTask, cfg.Logger, time.Second*3)
-	n.nodeAppSyncWorker = nodeAppSync
+	// For Security, unset any onePassword related things
+	n.onePasswordClient = nil
+	cfg.OnePasswordToken = ""
 
 	return n, nil
 }
@@ -215,9 +205,6 @@ func (n *Nodosum) Start() {
 			n.logger.Error("joining initial seed nodes failed", err)
 		}
 		n.logger.Debug("Start: Join() completed", "nodesConnected", nodesConnected)
-
-		n.logger.Debug("Start: starting nodeAppSyncWorker")
-		go n.nodeAppSyncWorker.Start()
 
 		n.logger.Debug("Start: closing readyChan")
 		close(n.readyChan)
@@ -256,12 +243,6 @@ func (n *Nodosum) Shutdown() {
 	if err != nil {
 		n.logger.Error("ml failed to leave properly", "err", err)
 	}
-	n.nodeAppSyncWorker.Stop()
-	n.connections.Range(func(k, v interface{}) bool {
-		id := k.(string)
-		n.closeConnChannel(id)
-		return true
-	})
 	n.cancel()
 	n.logger.Debug("nodosum shutdown waiting on routines to exit...")
 	n.wg.Wait()
