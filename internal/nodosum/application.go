@@ -1,7 +1,6 @@
 package nodosum
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/conamu/go-worker"
@@ -18,9 +17,9 @@ type Application interface {
 
 type application struct {
 	id            string
+	nodosum       *Nodosum
 	receiveFunc   func(payload []byte) error
 	nodes         []string
-	sendWorker    *worker.Worker
 	receiveWorker *worker.Worker
 }
 
@@ -31,12 +30,6 @@ type dataPackage struct {
 }
 
 func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
-
-	sendWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-send", uniqueIdentifier), n.wg, n.applicationSendTask, n.logger, 0)
-	sendWorker.InputChan = make(chan any, 100)
-	sendWorker.OutputChan = n.globalWriteChannel
-	go sendWorker.Start()
-
 	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
 	receiveWorker.InputChan = make(chan any, 100)
 	go receiveWorker.Start()
@@ -54,7 +47,7 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 
 	app := &application{
 		id:            uniqueIdentifier,
-		sendWorker:    sendWorker,
+		nodosum:       n,
 		receiveWorker: receiveWorker,
 		nodes:         nodes,
 	}
@@ -72,17 +65,40 @@ func (n *Nodosum) GetApplication(uniqueIdentifier string) Application {
 }
 
 func (a *application) Send(payload []byte, ids []string) error {
-	select {
-	case <-a.sendWorker.Ctx.Done():
-		return errors.New("send channel closed")
-	default:
-		dp := dataPackage{
-			id:             a.id,
-			payload:        payload,
-			receivingNodes: ids,
+	// Determine target nodes
+	targetNodes := ids
+	if len(targetNodes) == 0 {
+		// Broadcast: get all connected nodes
+		targetNodes = a.nodosum.getConnectedNodes()
+	}
+
+	if len(targetNodes) == 0 {
+		return fmt.Errorf("no connected nodes to send to")
+	}
+
+	// Send to each target node via dedicated QUIC stream
+	var sendErrors []error
+	for _, nodeId := range targetNodes {
+		// Get or create stream for this app to this node
+		stream, err := a.nodosum.getOrOpenQuicStream(nodeId, a.id, "data")
+		if err != nil {
+			a.nodosum.logger.Error("failed to get stream", "error", err, "nodeId", nodeId, "app", a.id)
+			sendErrors = append(sendErrors, fmt.Errorf("node %s: %w", nodeId, err))
+			continue
 		}
 
-		a.sendWorker.InputChan <- &dp
+		// Encode and write data frame to stream
+		frame := encodeDataFrame(payload)
+		_, err = (*stream).Write(frame)
+		if err != nil {
+			a.nodosum.logger.Error("failed to write to stream", "error", err, "nodeId", nodeId, "app", a.id)
+			sendErrors = append(sendErrors, fmt.Errorf("node %s: %w", nodeId, err))
+			continue
+		}
+	}
+
+	if len(sendErrors) > 0 {
+		return fmt.Errorf("failed to send to %d/%d nodes: %v", len(sendErrors), len(targetNodes), sendErrors)
 	}
 
 	return nil
@@ -99,11 +115,7 @@ func (a *application) SetReceiveFunc(callback func(payload []byte) error) {
 }
 
 func (a *application) Nodes() []string {
-	return a.nodes
-}
-
-func (n *Nodosum) applicationSendTask(w *worker.Worker, msg any) {
-	w.OutputChan <- msg
+	return a.nodosum.getConnectedNodes()
 }
 
 func (n *Nodosum) applicationReceiveTask(w *worker.Worker, msg any) {

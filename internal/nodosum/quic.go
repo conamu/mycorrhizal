@@ -195,3 +195,15 @@ func readFrame(stream io.Reader) (frameType byte, payload []byte, err error) {
 	// Unknown frame type - return it but no payload
 	return frameType, nil, nil
 }
+
+func (n *Nodosum) getConnectedNodes() []string {
+	ids := make([]string, 0)
+
+	n.quicConns.RLock()
+	for id := range n.quicConns.conns {
+		ids = append(ids, id)
+	}
+	n.quicConns.RUnlock()
+
+	return ids
+}

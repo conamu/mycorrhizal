@@ -37,6 +37,11 @@ func (n *Nodosum) listenQuic() {
 		default:
 			conn, err := ln.Accept(n.ctx)
 			if err != nil {
+				// Check if this is a shutdown error
+				if errors.Is(err, context.Canceled) || errors.Is(err, net.ErrClosed) {
+					n.logger.Debug("quic listener shutting down")
+					return
+				}
 				n.logger.Error(fmt.Sprintf("error accepting quic connection: %s", err.Error()))
 				continue
 			}
@@ -47,6 +52,10 @@ func (n *Nodosum) listenQuic() {
 }
 
 func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
+	if conn == nil {
+		n.logger.Error("handleQuicConn called with nil connection")
+		return
+	}
 	nodeID := conn.ConnectionState().TLS.ServerName
 
 	for {
@@ -75,6 +84,41 @@ func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
 	}
 }
 
+func (n *Nodosum) closeQuicConnection(nodeId string) {
+
+	// Clean up all streams for this node
+	n.quicApplicationStreams.Lock()
+	keysToDelete := make([]string, 0)
+	for key := range n.quicApplicationStreams.streams {
+		// Key format: "nodeId:app:name"
+		if strings.HasPrefix(key, nodeId+":") {
+			keysToDelete = append(keysToDelete, key)
+		}
+	}
+	for _, key := range keysToDelete {
+		if stream := n.quicApplicationStreams.streams[key]; stream != nil {
+			err := (*stream).Close()
+			if err != nil {
+				n.logger.Error(fmt.Sprintf("error closing quic stream: %s", err.Error()))
+			}
+		}
+		delete(n.quicApplicationStreams.streams, key)
+	}
+	n.quicApplicationStreams.Unlock()
+
+	// Close the QUIC connection
+	n.quicConns.Lock()
+	if conn, exists := n.quicConns.conns[nodeId]; exists {
+		if conn != nil {
+			conn.CloseWithError(0, "connection closed")
+		}
+		delete(n.quicConns.conns, nodeId)
+	}
+	n.quicConns.Unlock()
+
+	n.logger.Debug("closed QUIC connection and all streams", "nodeId", nodeId, "streamsClosed", len(keysToDelete))
+}
+
 func (n *Nodosum) handleStream(stream *quic.Stream) {
 
 	if stream == nil {
@@ -101,6 +145,10 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 
 	n.logger.Debug(fmt.Sprintf("Registered stream, %s, %s, %s", nodeId, appId, streamName))
 }
+
+func (n *Nodosum) streamReadLoop() {}
+
+func (n *Nodosum) streamWriteLoop() {}
 
 func (n *Nodosum) listenUdp() {
 	n.wg.Go(

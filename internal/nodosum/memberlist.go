@@ -67,20 +67,7 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 }
 
 func (d Delegate) NotifyLeave(node *memberlist.Node) {
-
-	d.quicConns.Lock()
-
-	c := d.quicConns.conns[node.Name]
-	if c != nil {
-		err := c.CloseWithError(0, "goodbye")
-		if err != nil {
-			d.logger.Error(err.Error())
-		}
-	}
-
-	delete(d.quicConns.conns, node.Name)
-	d.quicConns.Unlock()
-
+	d.closeQuicConnection(node.Name)
 	d.logger.Debug(fmt.Sprintf("node left: %s", node.Name))
 }
 

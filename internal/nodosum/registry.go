@@ -37,7 +37,7 @@ type NodeMeta struct {
 	alive       bool
 }
 
-func (n *Nodosum) getOrCreateQuicStream(nodeId, app, name string) (*quic.Stream, error) {
+func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, error) {
 	key := fmt.Sprintf("%s:%s:%s", nodeId, app, name)
 
 	n.quicApplicationStreams.RLock()
@@ -73,6 +73,36 @@ func (n *Nodosum) getOrCreateQuicStream(nodeId, app, name string) (*quic.Stream,
 
 	return nil, errors.New(fmt.Sprintf("quic connection to node %s could not be found, not creating stream for key %s", nodeId, key))
 }
+
+func (n *Nodosum) closeQuicStream(id string) {
+	stream, ok := n.quicApplicationStreams.streams[id]
+	if !ok {
+		n.logger.Warn(fmt.Sprintf("closing quic stream for %s, but stream is nil", id))
+		return
+	}
+
+	err := stream.Close()
+	if err != nil {
+		n.logger.Error(fmt.Sprintf("error closing quic stream: %s", err.Error()))
+	}
+	delete(n.quicApplicationStreams.streams, id)
+	return
+}
+
+func (n *Nodosum) closeAllQuicStreams() {
+	n.quicApplicationStreams.Lock()
+	defer n.quicApplicationStreams.Unlock()
+
+	for id, stream := range n.quicApplicationStreams.streams {
+		err := stream.Close()
+		if err != nil {
+			n.logger.Error(fmt.Sprintf("error closing quic stream: %s", err.Error()))
+		}
+		delete(n.quicApplicationStreams.streams, id)
+	}
+}
+
+// Old shit
 
 func (n *Nodosum) createConnChannel(id string, conn net.Conn) {
 	ctx, cancel := context.WithCancel(n.ctx)

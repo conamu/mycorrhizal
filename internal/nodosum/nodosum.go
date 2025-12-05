@@ -56,19 +56,15 @@ type Nodosum struct {
 	connections            *sync.Map
 	applications           *sync.Map
 	nodeAppSyncWorker      *worker.Worker
-	// globalReadChannel transfers all incoming packets from connections to the multiplexer
-	globalReadChannel chan any
-	// globalWriteChannel transfers all outgoing packets from applications to the multiplexer
-	globalWriteChannel    chan any
-	wg                    *sync.WaitGroup
-	handshakeTimeout      time.Duration
-	tlsEnabled            bool
-	tlsConfig             *tls.Config
-	tlsCaCert             *x509.Certificate
-	tlsCaKey              *rsa.PrivateKey
-	multiplexerBufferSize int
-	muxWorkerCount        int
-	readyChan             chan any
+	wg                     *sync.WaitGroup
+	handshakeTimeout       time.Duration
+	tlsEnabled             bool
+	tlsConfig              *tls.Config
+	tlsCaCert              *x509.Certificate
+	tlsCaKey               *rsa.PrivateKey
+	multiplexerBufferSize  int
+	muxWorkerCount         int
+	readyChan              chan any
 }
 
 type quicConns struct {
@@ -158,8 +154,6 @@ func New(cfg *Config) (*Nodosum, error) {
 		logger:                 cfg.Logger,
 		connections:            &sync.Map{},
 		applications:           &sync.Map{},
-		globalReadChannel:      make(chan any, cfg.MultiplexerBufferSize),
-		globalWriteChannel:     make(chan any, cfg.MultiplexerBufferSize),
 		wg:                     cfg.Wg,
 		handshakeTimeout:       cfg.HandshakeTimeout,
 		tlsCaCert:              cfg.TlsCACert,
