@@ -1,13 +1,15 @@
 package mycel
 
-func (c *cache) getRemote(bucket, key string) (any, error) {
+import "time"
+
+func (c *cache) getRemote(bucket, key string) ([]byte, error) {
 	c.nodeScoreHashMap.RLock()
 	target := c.nodeScoreHashMap.data[bucket+key]
 	c.nodeScoreHashMap.RUnlock()
 
-	err := c.app.Send(nil, []string{target})
+	res, err := c.app.Request(nil, target, time.Millisecond*100)
 	if err != nil {
 		return nil, err
 	}
-	return target, nil
+	return res, nil
 }

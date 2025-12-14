@@ -28,6 +28,7 @@ func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, e
 	n.quicApplicationStreams.RLock()
 	if stream, ok := n.quicApplicationStreams.streams[key]; ok {
 		n.quicApplicationStreams.RUnlock()
+		n.logger.Debug("reusing cached stream", "key", key)
 		return stream, nil
 	}
 	n.quicApplicationStreams.RUnlock()
@@ -41,18 +42,21 @@ func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, e
 			return nil, err
 		}
 
-		streamInitFrame := encodeStreamInit(nodeId, app, name)
+		// CRITICAL FIX: Send sender's node ID (n.nodeId), not target node ID (nodeId)
+		streamInitFrame := encodeStreamInit(n.nodeId, app, name)
 		b, err := stream.Write(streamInitFrame)
 		if err != nil {
-			n.logger.Error(fmt.Sprintf("error writing initial quic stream: %s", err.Error()))
+			n.logger.Error("error writing initial quic stream", "error", err)
 		}
 		if b != len(streamInitFrame) {
-			n.logger.Warn(fmt.Sprintf("initial quic stream written bytes wrong, expected %d, got %d", len(streamInitFrame), b))
+			n.logger.Warn("initial quic stream written bytes wrong", "expected", len(streamInitFrame), "got", b)
 		}
 
 		n.quicApplicationStreams.Lock()
 		n.quicApplicationStreams.streams[key] = stream
 		n.quicApplicationStreams.Unlock()
+
+		n.logger.Debug("created new stream", "key", key, "senderNodeId", n.nodeId, "targetNodeId", nodeId)
 		return stream, nil
 	}
 

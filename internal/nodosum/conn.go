@@ -124,9 +124,23 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 		return
 	}
 
+	// Read frame type byte (should be FRAME_TYPE_STREAM_INIT)
+	typeBuf := make([]byte, 1)
+	_, err := io.ReadFull(stream, typeBuf)
+	if err != nil {
+		n.logger.Error("error reading stream init frame type", "error", err)
+		return
+	}
+
+	if typeBuf[0] != FRAME_TYPE_STREAM_INIT {
+		n.logger.Error("unexpected frame type in stream init", "type", typeBuf[0])
+		return
+	}
+
 	nodeId, appId, streamName, err := decodeStreamInit(stream)
 	if err != nil {
-		n.logger.Error(fmt.Sprintf("error decoding quic initial frame: %s", err.Error()))
+		n.logger.Error("error decoding quic initial frame", "error", err)
+		return
 	}
 
 	key := fmt.Sprintf("%s:%s:%s", nodeId, appId, streamName)
@@ -137,7 +151,7 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 
 	go n.streamReadLoop(stream, nodeId, appId)
 
-	n.logger.Debug(fmt.Sprintf("Registered stream, %s, %s, %s", nodeId, appId, streamName))
+	n.logger.Debug("Registered stream", "nodeId", nodeId, "appId", appId, "streamName", streamName)
 }
 
 func (n *Nodosum) handleRequest(stream *quic.Stream, appID string, frameData []byte, fromNode string) {
@@ -213,11 +227,15 @@ func (n *Nodosum) handleResponse(frameData []byte) {
 }
 
 func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
-	defer stream.Close()
+	defer func() {
+		stream.Close()
+		n.logger.Debug("stream closed", "nodeId", nodeID, "appId", appID)
+	}()
 
 	for {
 		select {
 		case <-n.ctx.Done():
+			n.logger.Debug("quic stream read loop closed")
 			return
 		default:
 			// Read next frame using existing readFrame() function from quic.go
@@ -228,7 +246,7 @@ func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 					return
 				}
 				n.logger.Error("error reading frame", "error", err)
-				return
+				continue
 			}
 
 			// Handle different frame types
@@ -245,8 +263,6 @@ func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 		}
 	}
 }
-
-func (n *Nodosum) streamWriteLoop() {}
 
 func isQuicConnectionClosed(err error) bool {
 	if err == nil {

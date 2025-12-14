@@ -33,13 +33,6 @@ type application struct {
 	ctx               context.Context
 }
 
-type dataPackage struct {
-	id             string
-	payload        []byte
-	fromNodeId     string
-	receivingNodes []string
-}
-
 func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 	receiveWorker := worker.NewWorker(n.ctx, fmt.Sprintf("%s-receive", uniqueIdentifier), n.wg, n.applicationReceiveTask, n.logger, 0)
 	receiveWorker.InputChan = make(chan any, 100)
@@ -106,12 +99,13 @@ func (a *application) Send(payload []byte, ids []string) error {
 
 		// Encode and write data frame to stream
 		frame := encodeDataFrame(payload)
-		_, err = (*stream).Write(frame)
+		n, err := (*stream).Write(frame)
 		if err != nil {
 			a.nodosum.logger.Error("failed to write to stream", "error", err, "nodeId", nodeId, "app", a.id)
 			sendErrors = append(sendErrors, fmt.Errorf("node %s: %w", nodeId, err))
 			continue
 		}
+		a.nodosum.logger.Debug("sent data frame", "nodeId", nodeId, "app", a.id, "payloadSize", len(payload), "frameSize", n)
 	}
 
 	if len(sendErrors) > 0 {
@@ -218,13 +212,19 @@ func (n *Nodosum) routeToApplication(appID string, payload []byte, fromNode stri
 		return
 	}
 
-	// Send to application's receive worker
-	select {
-	case app.receiveWorker.InputChan <- dataPackage{
-		payload:    payload,
-		fromNodeId: fromNode,
-	}:
-	case <-time.After(100 * time.Millisecond):
-		n.logger.Warn("application receive channel full, message discarded", "appID", appID)
+	timeoutChan := time.After(100 * time.Millisecond)
+
+	// Send to application's receive worker (just the payload, not wrapped in struct)
+	for {
+		select {
+		case app.receiveWorker.InputChan <- payload:
+			n.logger.Debug("received message for application", "appID", appID)
+			return
+		case <-timeoutChan:
+			n.logger.Warn("application receive channel full, message discarded",
+				"appID", appID, "fromNode", fromNode)
+			return
+		}
 	}
+
 }
