@@ -42,6 +42,7 @@ type Nodosum struct {
 	startOnce              sync.Once
 	onePasswordClient      *onepassword.Client
 	ml                     *memberlist.Memberlist
+	delegate               *Delegate
 	connInit               *connInit
 	listenerTcp            net.Listener
 	quicPort               int
@@ -157,9 +158,12 @@ func New(cfg *Config) (*Nodosum, error) {
 		readyChan:              make(chan any),
 	}
 
-	cfg.MemberlistConfig.Events = &Delegate{
-		Nodosum: n,
+	delegate := &Delegate{
+		Nodosum:      n,
+		dialAttempts: make(map[string]int),
 	}
+	cfg.MemberlistConfig.Events = delegate
+	n.delegate = delegate
 
 	nodeCert, caCert, err := n.generateNodeCert()
 	if err != nil {
@@ -220,7 +224,7 @@ func (n *Nodosum) Start() {
 			if member.Name != n.nodeId {
 				n.logger.Debug("Start: connecting to initial node", "node", member.Name)
 				// Manually trigger QUIC connection establishment
-				go Delegate{n}.NotifyJoin(member)
+				go n.delegate.NotifyJoin(member)
 			}
 		}
 

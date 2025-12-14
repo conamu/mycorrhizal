@@ -490,6 +490,9 @@ func (n *Nodosum) getConnectedNodes() []string {
 
 	n.quicConns.RLock()
 	for id := range n.quicConns.conns {
+		if n.nodeId == id {
+			continue
+		}
 		ids = append(ids, id)
 	}
 	n.quicConns.RUnlock()
