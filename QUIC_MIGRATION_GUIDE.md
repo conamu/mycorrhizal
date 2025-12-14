@@ -21,10 +21,10 @@ All critical bugs have been fixed:
 ## Table of Contents
 
 1. [~~Critical Bug Fixes~~](#part-1-critical-bug-fixes---completed) ✅ **DONE**
-2. [Fix Stream Read Loop](#part-2-fix-stream-read-loop) ⚠️ **CRITICAL - IN PROGRESS**
-3. [Implement Application Message Routing](#part-3-implement-application-message-routing) ⚠️ **CRITICAL TODO**
-4. [Request-Response Patterns](#part-4-request-response-patterns) ⚠️ **TODO** (HIGH PRIORITY)
-5. [Testing and Validation](#part-5-testing-and-validation)
+2. [~~Fix Stream Read Loop~~](#part-2-fix-stream-read-loop) ✅ **DONE**
+3. [~~Implement Application Message Routing~~](#part-3-implement-application-message-routing) ✅ **DONE**
+4. [~~Request-Response Patterns~~](#part-4-request-response-patterns) ✅ **DONE**
+5. [Testing and Validation](#part-5-testing-and-validation) ⚠️ **TODO**
 
 ---
 
@@ -48,16 +48,16 @@ All critical bugs have been fixed:
 
 ---
 
-## Part 2: Fix Stream Read Loop ⚠️ CRITICAL
+## Part 2: Fix Stream Read Loop ✅ COMPLETED
 
-### Current Problem: Broken streamReadLoop Implementation
+### Status: FIXED
 
-**File:** `internal/nodosum/conn.go:153-181`
+**File:** `internal/nodosum/conn.go:215-247`
 
-The `streamReadLoop()` function exists but is broken:
+The `streamReadLoop()` function has been fixed and now properly handles all frame types:
 
 ```go
-// CURRENT BROKEN CODE (conn.go:153-181)
+// FIXED CODE (conn.go:215-247)
 func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 	defer stream.Close()
 
@@ -67,7 +67,7 @@ func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 			return
 		default:
 			// Read next frame using existing readFrame() function from quic.go
-			frameType, payload, err := readFrame(stream)  // ✅ This works
+			frameType, payload, err := readFrame(stream)
 			if err != nil {
 				if isQuicConnectionClosed(err) {
 					n.logger.Debug("stream closed", "nodeID", nodeID, "appID", appID)
@@ -77,10 +77,14 @@ func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 				return
 			}
 
-			// For now, only handle DATA frames (REQUEST/RESPONSE not yet implemented)
+			// Handle different frame types
 			switch frameType {
 			case FRAME_TYPE_DATA:
-				n.routeToApplication(appID, payload, nodeID)  // ❌ DOES NOT EXIST
+				n.routeToApplication(appID, payload, nodeID)  // ✅ Implemented
+			case FRAME_TYPE_REQUEST:
+				n.handleRequest(stream, appID, payload, nodeID)  // ✅ Implemented
+			case FRAME_TYPE_RESPONSE:
+				n.handleResponse(payload)  // ✅ Implemented
 			default:
 				n.logger.Warn("unknown frame type", "type", frameType)
 			}
@@ -89,30 +93,20 @@ func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 }
 ```
 
-**Problem:** The function calls `n.routeToApplication()` which doesn't exist anywhere in the codebase.
+**Fixed:** All frame types are now properly handled.
 
-### Current handleStream Implementation
+### Fixed handleStream Implementation
 
-**File:** `internal/nodosum/conn.go:122-151`
+**File:** `internal/nodosum/conn.go:122-141`
 
 ```go
-// CURRENT CODE (conn.go:122-151) - HAS ISSUES
+// FIXED CODE (conn.go:122-141)
 func (n *Nodosum) handleStream(stream *quic.Stream) {
-
-	frameType, frameLen, err := readFrame(stream)  // ❌ Line 124: variables declared but not used
-
-	if stream == nil {  // ❌ Should be checked first
+	if stream == nil {  // ✅ Nil check first
 		return
 	}
 
-	frameType := make([]byte, 1)  // ❌ Redeclared variable
-
-	_, err := io.ReadFull(stream, frameType)  // ❌ Redeclared err
-	if err != nil {
-		n.logger.Error(fmt.Sprintf("error reading quic frame type: %s", err.Error()))
-	}
-
-	nodeId, appId, streamName, err := decodeStreamInit(stream)
+	nodeId, appId, streamName, err := decodeStreamInit(stream)  // ✅ Proper decoding
 	if err != nil {
 		n.logger.Error(fmt.Sprintf("error decoding quic initial frame: %s", err.Error()))
 	}
@@ -123,52 +117,56 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 	n.quicApplicationStreams.streams[key] = stream
 	n.quicApplicationStreams.Unlock()
 
-	go n.streamReadLoop(stream, streamInit.NodeID, streamInit.ApplicationID)  // ❌ streamInit undefined
+	go n.streamReadLoop(stream, nodeId, appId)  // ✅ Correct variables
 
 	n.logger.Debug(fmt.Sprintf("Registered stream, %s, %s, %s", nodeId, appId, streamName))
 }
 ```
 
-**Problems:**
-1. Multiple variable redeclarations
-2. References undefined `streamInit` variable
-3. Attempts to read frame twice (once with `readFrame`, once manually)
-4. No error handling for decoding failures
+**Fixed:**
+1. ✅ Nil check at the beginning
+2. ✅ Proper stream initialization decoding
+3. ✅ No variable redeclarations
+4. ✅ Correctly launches streamReadLoop
 
 ---
 
-## Part 3: Implement Application Message Routing ⚠️ CRITICAL
+## Part 3: Implement Application Message Routing ✅ COMPLETED
 
-### Missing Function: routeToApplication
+### Status: IMPLEMENTED
 
-This function is called by `streamReadLoop()` but doesn't exist. It needs to deliver received messages to the appropriate application's receive worker.
+**File:** `internal/nodosum/application.go:191-209`
 
-**Add to:** `internal/nodosum/conn.go` or `internal/nodosum/application.go`
+The `routeToApplication()` function has been implemented and properly routes messages to registered applications:
 
 ```go
+// IMPLEMENTED CODE (application.go:191-209)
 func (n *Nodosum) routeToApplication(appID string, payload []byte, fromNode string) {
-	// Look up the application
-	val, ok := n.applications.Load(appID)
-	if !ok {
-		n.logger.Warn("received message for unknown application", "appID", appID, "fromNode", fromNode)
+	n.applications.RLock()
+	app, exists := n.applications.applications[appID]
+	n.applications.RUnlock()
+
+	if !exists {
+		n.logger.Warn("received message for unknown application", "appID", appID)
 		return
 	}
-
-	app := val.(*application)
 
 	// Send to application's receive worker
 	select {
-	case app.receiveWorker.InputChan <- payload:
-		// Successfully delivered
-	case <-n.ctx.Done():
-		// Shutting down
-		return
-	default:
-		n.logger.Warn("application receive channel full, dropping message",
-			"appID", appID, "fromNode", fromNode)
+	case app.receiveWorker.InputChan <- dataPackage{
+		payload:    payload,
+		fromNodeId: fromNode,
+	}:
+	case <-time.After(100 * time.Millisecond):
+		n.logger.Warn("application receive channel full, message discarded", "appID", appID)
 	}
 }
 ```
+
+**Implemented:**
+✅ Proper application lookup using RLock
+✅ Sends dataPackage with payload and source node
+✅ Timeout handling for full channels
 
 ### Update Application Receive Task
 
@@ -188,48 +186,71 @@ This is actually correct - `SetReceiveFunc()` at line 107-115 properly replaces 
 
 ---
 
-## Part 4: Request-Response Patterns ⚠️ TODO (HIGH PRIORITY)
+## Part 4: Request-Response Patterns ✅ COMPLETED
 
-### Problem Statement
+### Status: FULLY IMPLEMENTED
 
-The current Application interface only supports **one-way message passing**:
+The Application interface now supports **request-response patterns** with correlation IDs:
 
 ```go
-// CURRENT (application.go:9-16)
+// IMPLEMENTED (application.go:12-21)
 type Application interface {
-	Send(payload []byte, ids []string) error        // Fire and forget
-	SetReceiveFunc(func(payload []byte) error)      // Just receives
+	Send(payload []byte, ids []string) error                                    // Fire and forget
+	Request(payload []byte, targetNode string, timeout time.Duration) ([]byte, error)  // Request-response
+	SetReceiveFunc(func(payload []byte) error)                                  // Handle one-way messages
+	SetRequestHandler(func([]byte, string) ([]byte, error))                    // Handle requests
 	Nodes() []string
 }
 ```
 
-**Critical issue**: No way to correlate responses with requests!
+**Implemented:**
+✅ Correlation IDs for matching requests and responses
+✅ Request() method with timeout support
+✅ SetRequestHandler() for handling incoming requests
+✅ Full frame encoding/decoding for REQUEST and RESPONSE types
 
-This is why Mycel's cache operations can't work across nodes - there's no way to send a GET request and wait for the response.
+### Implementation Details
 
-### Recommended Solution: Add Correlation IDs
+**Step 1: Frame Types (COMPLETED)**
 
-**Step 1: Add new frame types to quic.go**
-
-**File:** `internal/nodosum/quic.go` (add after line 12)
+**File:** `internal/nodosum/quic.go:9-14`
 
 ```go
+// IMPLEMENTED
 const (
-	FRAME_TYPE_STREAM_INIT = 0x01  // Existing
-	FRAME_TYPE_DATA        = 0x02  // Existing
-	FRAME_TYPE_REQUEST     = 0x03  // NEW
-	FRAME_TYPE_RESPONSE    = 0x04  // NEW
+	FRAME_TYPE_STREAM_INIT = 0x01  // First message on a new stream
+	FRAME_TYPE_DATA        = 0x02  // Subsequent data messages
+	FRAME_TYPE_REQUEST     = 0x03  // ✅ Request with correlation ID
+	FRAME_TYPE_RESPONSE    = 0x04  // ✅ Response with correlation ID
 )
+
+type RequestFrame struct {
+	CorrelationID string
+	Payload       []byte
+}
+
+type ResponseFrame struct {
+	CorrelationID string
+	Payload       []byte
+	Error         string
+}
 ```
 
-**Step 2: Add request/response frame encoding**
+**Step 2: Frame Encoding/Decoding (COMPLETED)**
 
-**File:** `internal/nodosum/quic.go` (add at end)
+**File:** `internal/nodosum/quic.go:153-356`
 
-```go
-// encodeRequestFrame creates a request frame with correlation ID
-// Frame format: [type:1][corrID_len:2][corrID:N][payload_len:4][payload:N]
-func encodeRequestFrame(correlationID string, payload []byte) []byte {
+All request and response frame encoding/decoding functions have been implemented:
+
+✅ `encodeRequestFrame(RequestFrame) []byte` - Lines 153-185
+✅ `decodeRequestFrame([]byte, *RequestFrame) error` - Lines 187-232
+✅ `encodeResponseFrame(ResponseFrame) []byte` - Lines 234-275
+✅ `decodeResponseFrame([]byte, *ResponseFrame) error` - Lines 277-340
+✅ `sendResponseFrame(io.Writer, ResponseFrame) error` - Lines 342-356
+
+**Frame format for REQUEST:**
+```
+[type:1][corrID_len:2][corrID:N][payload_len:4][payload:N]
 	corrIDBytes := []byte(correlationID)
 	corrIDLen := uint16(len(corrIDBytes))
 	payloadLen := uint32(len(payload))
@@ -685,29 +706,31 @@ func TestRequestTimeout(t *testing.T) {
 
 ## Migration Checklist
 
-### Phase 1: Fix Stream Reading ⚠️ CRITICAL
-- [ ] Fix `handleStream()` implementation (conn.go:122-151)
-  - Remove duplicate variable declarations
+### Phase 1: Fix Stream Reading ✅ COMPLETED
+- [x] Fix `handleStream()` implementation (conn.go:122-141)
+  - Removed duplicate variable declarations
   - Properly read STREAM_INIT frame
   - Launch streamReadLoop as goroutine
-- [ ] Fix `streamReadLoop()` (conn.go:153-181)
-  - Already mostly correct, just needs routeToApplication
-- [ ] Implement `routeToApplication()` function
+- [x] Fix `streamReadLoop()` (conn.go:215-247)
+  - Handles DATA, REQUEST, and RESPONSE frames
+- [x] Implement `routeToApplication()` function (application.go:191-209)
 - [ ] Test basic one-way messaging works
 
-### Phase 2: Request-Response Implementation ⚠️ HIGH PRIORITY
-- [ ] Add FRAME_TYPE_REQUEST and FRAME_TYPE_RESPONSE to quic.go
-- [ ] Implement encodeRequestFrame() and decodeRequestFrame()
-- [ ] Implement encodeResponseFrame() and decodeResponseFrame()
-- [ ] Add Request() method to Application interface
-- [ ] Add SetRequestHandler() method to Application interface
-- [ ] Add pendingRequests field to application struct
-- [ ] Implement Request() method in application.go
-- [ ] Implement SetRequestHandler() in application.go
-- [ ] Update streamReadLoop() to handle REQUEST/RESPONSE frames
-- [ ] Implement handleRequest() function
-- [ ] Implement handleResponse() function
-- [ ] Update RegisterApplication() to initialize pendingRequests
+### Phase 2: Request-Response Implementation ✅ COMPLETED
+- [x] Add FRAME_TYPE_REQUEST and FRAME_TYPE_RESPONSE to quic.go
+- [x] Implement encodeRequestFrame() and decodeRequestFrame()
+- [x] Implement encodeResponseFrame() and decodeResponseFrame()
+- [x] Add Request() method to Application interface
+- [x] Add SetRequestHandler() method to Application interface
+- [x] Add pendingRequests field to application struct
+- [x] Implement Request() method in application.go (lines 124-166)
+- [x] Implement SetRequestHandler() in application.go (line 179)
+- [x] Implement sendRequestFrame() helper (application.go:187-205)
+- [x] Update streamReadLoop() to handle REQUEST/RESPONSE frames
+- [x] Implement handleRequest() function (conn.go:143-180)
+- [x] Implement handleResponse() function (conn.go:182-213)
+- [x] Update RegisterApplication() to initialize pendingRequests (line 64)
+- [x] Add context field to application struct (line 32)
 - [ ] Test request-response works end-to-end
 - [ ] Test timeout handling
 - [ ] Test concurrent requests (100+)
@@ -755,25 +778,34 @@ func TestRequestTimeout(t *testing.T) {
 
 ## Summary
 
-The migration is approximately **70% complete**:
+The migration is approximately **95% complete**:
 
-✅ **Working:**
+✅ **Completed:**
 - QUIC connection establishment and management
 - Stream creation and registration
-- Basic frame protocol (STREAM_INIT, DATA)
+- Full frame protocol (STREAM_INIT, DATA, REQUEST, RESPONSE)
 - Send() implementation writes to streams
 - Connection cleanup and graceful shutdown
+- ✅ **NEW:** Fixed handleStream() implementation
+- ✅ **NEW:** Implemented routeToApplication() for message routing
+- ✅ **NEW:** Full request-response pattern with correlation IDs
+- ✅ **NEW:** Request() method with timeout support
+- ✅ **NEW:** SetRequestHandler() for handling incoming requests
+- ✅ **NEW:** Complete frame encoding/decoding for all frame types
+- ✅ **NEW:** Fixed application struct with context and pendingRequests
 
-⚠️ **Critical Issues:**
-- `handleStream()` has compilation errors
-- `streamReadLoop()` calls non-existent `routeToApplication()`
-- No request-response correlation system
-- Applications never receive messages
+⚠️ **Remaining Work:**
+- Integration testing of one-way messaging
+- Integration testing of request-response patterns
+- Timeout handling tests
+- Concurrent request tests (100+)
+- Cache layer integration (using Request() instead of Send())
 
 🎯 **Next Steps:**
-1. Fix handleStream() and implement routeToApplication() - **blocks all functionality**
-2. Implement request-response with correlation IDs - **required for cache**
-3. Test thoroughly across multiple nodes
-4. Document and deploy
+1. Write integration tests for messaging functionality
+2. Test request-response end-to-end with timeouts
+3. Test concurrent operations under load
+4. Update Mycel cache layer to use Request() for remote operations
+5. Full system testing with multiple nodes
 
-Good luck completing the migration! 🚀
+The core implementation is complete! 🚀 Now ready for testing and validation.

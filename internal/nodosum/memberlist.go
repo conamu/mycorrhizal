@@ -61,9 +61,9 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 	d.quicConns.Unlock()
 
 	d.logger.Info("quic connection established",
-		"node", node.Name,
+		"remoteServerName", node.Name,
 		"remoteAddr", conn.RemoteAddr().String(),
-		"serverName", conn.ConnectionState().TLS.ServerName)
+		"localTlsServerName", conn.ConnectionState().TLS.ServerName)
 }
 
 func (d Delegate) NotifyLeave(node *memberlist.Node) {

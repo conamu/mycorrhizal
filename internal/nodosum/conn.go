@@ -140,6 +140,78 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 	n.logger.Debug(fmt.Sprintf("Registered stream, %s, %s, %s", nodeId, appId, streamName))
 }
 
+func (n *Nodosum) handleRequest(stream *quic.Stream, appID string, frameData []byte, fromNode string) {
+	// Decode request frame
+	var reqFrame RequestFrame
+	err := decodeRequestFrame(frameData, &reqFrame)
+	if err != nil {
+		n.logger.Error("failed to decode request frame", "error", err)
+		return
+	}
+
+	// Get application
+	n.applications.RLock()
+	app, exists := n.applications.applications[appID]
+	n.applications.RUnlock()
+
+	if !exists || app.requestHandler == nil {
+		// Send error response
+		respFrame := ResponseFrame{
+			CorrelationID: reqFrame.CorrelationID,
+			Error:         "application not found or no request handler",
+		}
+		sendResponseFrame(stream, respFrame)
+		return
+	}
+
+	// Call handler
+	respPayload, err := app.requestHandler(reqFrame.Payload, fromNode)
+
+	// Send response
+	respFrame := ResponseFrame{
+		CorrelationID: reqFrame.CorrelationID,
+		Payload:       respPayload,
+	}
+	if err != nil {
+		respFrame.Error = err.Error()
+	}
+
+	sendResponseFrame(stream, respFrame)
+}
+
+func (n *Nodosum) handleResponse(frameData []byte) {
+	// Decode response frame
+	var respFrame ResponseFrame
+	err := decodeResponseFrame(frameData, &respFrame)
+	if err != nil {
+		n.logger.Error("failed to decode response frame", "error", err)
+		return
+	}
+
+	// Find pending request
+	// Note: This needs access to all applications' pending requests
+	// Consider moving pendingRequests to Nodosum level
+	n.applications.RLock()
+	defer n.applications.RUnlock()
+
+	for _, app := range n.applications.applications {
+		app.pendingRequestsMu.RLock()
+		responseChan, exists := app.pendingRequests[respFrame.CorrelationID]
+		app.pendingRequestsMu.RUnlock()
+
+		if exists {
+			select {
+			case responseChan <- &respFrame:
+			default:
+				n.logger.Warn("response channel full", "correlationID", respFrame.CorrelationID)
+			}
+			return
+		}
+	}
+
+	n.logger.Warn("received response for unknown request", "correlationID", respFrame.CorrelationID)
+}
+
 func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 	defer stream.Close()
 
@@ -159,10 +231,14 @@ func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 				return
 			}
 
-			// For now, only handle DATA frames (REQUEST/RESPONSE not yet implemented)
+			// Handle different frame types
 			switch frameType {
 			case FRAME_TYPE_DATA:
 				n.routeToApplication(appID, payload, nodeID)
+			case FRAME_TYPE_REQUEST:
+				n.handleRequest(stream, appID, payload, nodeID)
+			case FRAME_TYPE_RESPONSE:
+				n.handleResponse(payload)
 			default:
 				n.logger.Warn("unknown frame type", "type", frameType)
 			}
