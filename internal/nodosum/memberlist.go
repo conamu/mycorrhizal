@@ -14,7 +14,7 @@ import (
 type Delegate struct {
 	*Nodosum
 	dialAttempts   map[string]int
-	dialAttemptsMu sync.RWMutex
+	dialAttemptsMu *sync.RWMutex
 }
 
 func (d Delegate) NotifyJoin(node *memberlist.Node) {
