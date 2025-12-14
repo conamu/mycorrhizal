@@ -172,7 +172,9 @@ func New(cfg *Config) (*Nodosum, error) {
 	n.tlsConfig = &tls.Config{
 		ServerName:   cfg.NodeId,
 		RootCAs:      ca,
+		ClientCAs:    ca, // For verifying client certificates
 		Certificates: []tls.Certificate{*nodeCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert, // Require mutual TLS
 		NextProtos:   []string{"mycorrizal"},
 	}
 
@@ -210,6 +212,17 @@ func (n *Nodosum) Start() {
 			n.logger.Error("joining initial seed nodes failed", err)
 		}
 		n.logger.Debug("Start: Join() completed", "nodesConnected", nodesConnected)
+
+		// Establish QUIC connections to initial nodes
+		// (NotifyJoin is only called for nodes that join AFTER startup)
+		n.logger.Debug("Start: establishing QUIC connections to initial nodes")
+		for _, member := range n.ml.Members() {
+			if member.Name != n.nodeId {
+				n.logger.Debug("Start: connecting to initial node", "node", member.Name)
+				// Manually trigger QUIC connection establishment
+				go Delegate{n}.NotifyJoin(member)
+			}
+		}
 
 		n.logger.Debug("Start: closing readyChan")
 		close(n.readyChan)

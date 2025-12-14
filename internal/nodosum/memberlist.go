@@ -23,24 +23,27 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 		}
 	}()
 
+	d.logger.Debug("NotifyJoin called", "node", node.Name, "addr", node.Addr.String())
+
 	d.quicConns.RLock()
 	if _, exists := d.quicConns.conns[node.Name]; exists {
 		d.quicConns.RUnlock()
-		d.logger.Debug(fmt.Sprintf("quic connection exists: %s", node.Name))
+		d.logger.Debug("quic connection already exists", "node", node.Name)
 		return
 	}
 	d.quicConns.RUnlock()
 
 	addr, err := net.ResolveUDPAddr("udp", node.Addr.String()+":"+strconv.Itoa(d.quicPort))
 	if err != nil {
-		d.logger.Error(fmt.Sprintf("error resolving quic address: %s", err.Error()))
+		d.logger.Error("error resolving quic address", "error", err, "node", node.Name)
+		return
 	}
 
 	dialCtx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
 	defer cancel()
 	conn, err := d.quicTransport.Dial(dialCtx, addr, d.tlsConfig, d.quicConfig)
 	if err != nil {
-		d.logger.Error(fmt.Sprintf("error accepting quic connection: %s", err.Error()))
+		d.logger.Error("error dialing quic connection", "error", err, "node", node.Name, "addr", addr.String())
 		return
 	}
 

@@ -53,7 +53,40 @@ func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
 		n.logger.Error("handleQuicConn called with nil connection")
 		return
 	}
-	nodeID := conn.ConnectionState().TLS.ServerName
+
+	// Get remote node ID from peer certificate's CommonName
+	tlsState := conn.ConnectionState().TLS
+	if len(tlsState.PeerCertificates) == 0 {
+		n.logger.Error("no peer certificates in connection")
+		return
+	}
+	nodeID := tlsState.PeerCertificates[0].Subject.CommonName
+
+	// Register this connection so we can send messages back to this node
+	// Only register if no connection exists (prefer outgoing dial connections)
+	shouldRegister := false
+	n.quicConns.Lock()
+	if _, exists := n.quicConns.conns[nodeID]; !exists {
+		n.quicConns.conns[nodeID] = conn
+		shouldRegister = true
+		n.quicConns.Unlock()
+		n.logger.Info("registered incoming quic connection", "nodeID", nodeID, "remoteAddr", conn.RemoteAddr().String())
+	} else {
+		n.quicConns.Unlock()
+		n.logger.Debug("incoming connection not registered, outgoing connection already exists", "nodeID", nodeID)
+	}
+
+	// Clean up connection from map when this handler exits (only if we registered it)
+	defer func() {
+		if shouldRegister {
+			n.quicConns.Lock()
+			if n.quicConns.conns[nodeID] == conn {
+				delete(n.quicConns.conns, nodeID)
+			}
+			n.quicConns.Unlock()
+			n.logger.Debug("unregistered quic connection", "nodeID", nodeID)
+		}
+	}()
 
 	for {
 		select {
@@ -229,7 +262,7 @@ func (n *Nodosum) handleResponse(frameData []byte) {
 func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
 	defer func() {
 		stream.Close()
-		n.logger.Debug("stream closed", "nodeId", nodeID, "appId", appID)
+		n.logger.Debug("stream read loop closed", "nodeId", nodeID, "appId", appID)
 	}()
 
 	for {
