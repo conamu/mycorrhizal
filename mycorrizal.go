@@ -103,20 +103,18 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	nodosumConfig := &nodosum.Config{
-		NodeId:                 id,
-		NodeAddrs:              &nodeMeta,
-		Ctx:                    ctx,
-		ListenPort:             cfg.ListenPort,
-		Logger:                 cfg.Logger,
-		Wg:                     &sync.WaitGroup{},
-		HandshakeTimeout:       cfg.HandshakeTimeout,
-		SharedSecret:           cfg.SharedSecret,
-		TlsCACert:              cfg.ClusterTLSCACert,
-		OnePasswordToken:       cfg.OnePassToken,
-		MultiplexerBufferSize:  cfg.MultiplexerBufferSize,
-		MultiplexerWorkerCount: cfg.MultiplexerWorkerCount,
-		MemberlistConfig:       cfg.MemberlistConfig,
-		QuicPort:               cfg.QuicPort,
+		NodeId:           id,
+		NodeAddrs:        &nodeMeta,
+		Ctx:              ctx,
+		ListenPort:       cfg.ListenPort,
+		Logger:           cfg.Logger,
+		Wg:               &sync.WaitGroup{},
+		HandshakeTimeout: cfg.HandshakeTimeout,
+		SharedSecret:     cfg.SharedSecret,
+		TlsCACert:        cfg.ClusterTLSCACert,
+		OnePasswordToken: cfg.OnePassToken,
+		MemberlistConfig: cfg.MemberlistConfig,
+		QuicPort:         cfg.QuicPort,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)

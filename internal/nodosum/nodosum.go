@@ -52,7 +52,7 @@ type Nodosum struct {
 	udpConn                *net.UDPConn
 	sharedSecret           string
 	logger                 *slog.Logger
-	applications           *sync.Map
+	applications           *applications
 	wg                     *sync.WaitGroup
 	tlsConfig              *tls.Config
 	tlsCaCert              *x509.Certificate
@@ -63,6 +63,11 @@ type Nodosum struct {
 type quicConns struct {
 	sync.RWMutex
 	conns map[string]*quic.Conn
+}
+
+type applications struct {
+	sync.RWMutex
+	applications map[string]*application
 }
 
 type quicApplicationStreams struct {
@@ -145,7 +150,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		udpConn:                udpConn,
 		sharedSecret:           cfg.SharedSecret,
 		logger:                 cfg.Logger,
-		applications:           &sync.Map{},
+		applications:           &applications{applications: make(map[string]*application)},
 		wg:                     cfg.Wg,
 		tlsCaCert:              cfg.TlsCACert,
 		tlsCaKey:               cfg.TlsCAKey,

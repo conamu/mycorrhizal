@@ -107,7 +107,10 @@ func (n *Nodosum) closeQuicConnection(nodeId string) {
 	n.quicConns.Lock()
 	if conn, exists := n.quicConns.conns[nodeId]; exists {
 		if conn != nil {
-			conn.CloseWithError(0, "connection closed")
+			err := conn.CloseWithError(0, "connection closed")
+			if err != nil {
+				n.logger.Error(fmt.Sprintf("error closing quic connection: %s", err.Error()))
+			}
 		}
 		delete(n.quicConns.conns, nodeId)
 	}
@@ -117,16 +120,8 @@ func (n *Nodosum) closeQuicConnection(nodeId string) {
 }
 
 func (n *Nodosum) handleStream(stream *quic.Stream) {
-
 	if stream == nil {
 		return
-	}
-
-	frameType := make([]byte, 1)
-
-	_, err := io.ReadFull(stream, frameType)
-	if err != nil {
-		n.logger.Error(fmt.Sprintf("error reading quic frame type: %s", err.Error()))
 	}
 
 	nodeId, appId, streamName, err := decodeStreamInit(stream)
@@ -140,10 +135,40 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 	n.quicApplicationStreams.streams[key] = stream
 	n.quicApplicationStreams.Unlock()
 
+	go n.streamReadLoop(stream, nodeId, appId)
+
 	n.logger.Debug(fmt.Sprintf("Registered stream, %s, %s, %s", nodeId, appId, streamName))
 }
 
-func (n *Nodosum) streamReadLoop() {}
+func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
+	defer stream.Close()
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+			// Read next frame using existing readFrame() function from quic.go
+			frameType, payload, err := readFrame(stream)
+			if err != nil {
+				if isQuicConnectionClosed(err) {
+					n.logger.Debug("stream closed", "nodeID", nodeID, "appID", appID)
+					return
+				}
+				n.logger.Error("error reading frame", "error", err)
+				return
+			}
+
+			// For now, only handle DATA frames (REQUEST/RESPONSE not yet implemented)
+			switch frameType {
+			case FRAME_TYPE_DATA:
+				n.routeToApplication(appID, payload, nodeID)
+			default:
+				n.logger.Warn("unknown frame type", "type", frameType)
+			}
+		}
+	}
+}
 
 func (n *Nodosum) streamWriteLoop() {}
 

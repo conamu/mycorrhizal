@@ -2,6 +2,7 @@ package nodosum
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/conamu/go-worker"
 )
@@ -26,6 +27,7 @@ type application struct {
 type dataPackage struct {
 	id             string
 	payload        []byte
+	fromNodeId     string
 	receivingNodes []string
 }
 
@@ -52,14 +54,18 @@ func (n *Nodosum) RegisterApplication(uniqueIdentifier string) Application {
 		nodes:         nodes,
 	}
 
-	n.applications.Store(uniqueIdentifier, app)
+	n.applications.Lock()
+	n.applications.applications[uniqueIdentifier] = app
+	n.applications.Unlock()
 	return app
 }
 
 func (n *Nodosum) GetApplication(uniqueIdentifier string) Application {
-	val, ok := n.applications.Load(uniqueIdentifier)
-	if ok {
-		return val.(*application)
+	n.applications.RLock()
+	app, exists := n.applications.applications[uniqueIdentifier]
+	n.applications.RUnlock()
+	if exists {
+		return app
 	}
 	return nil
 }
@@ -120,4 +126,25 @@ func (a *application) Nodes() []string {
 
 func (n *Nodosum) applicationReceiveTask(w *worker.Worker, msg any) {
 	w.Logger.Warn("application receive callback is not set")
+}
+
+func (n *Nodosum) routeToApplication(appID string, payload []byte, fromNode string) {
+	n.applications.RLock()
+	app, exists := n.applications.applications[appID]
+	n.applications.RUnlock()
+
+	if !exists {
+		n.logger.Warn("received message for unknown application", "appID", appID)
+		return
+	}
+
+	// Send to application's receive worker
+	select {
+	case app.receiveWorker.InputChan <- dataPackage{
+		payload:    payload,
+		fromNodeId: fromNode,
+	}:
+	case <-time.After(100 * time.Millisecond):
+		n.logger.Warn("application receive channel full, message discarded", "appID", appID)
+	}
 }
