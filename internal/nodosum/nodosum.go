@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"log/slog"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -24,12 +23,10 @@ import (
 SCOPE
 
 - Discover Instances via Consul API/DNS-SD
-- Establish Connections in Star Network Topology (all nodes have a connection to all nodes)
+- Establish Connections in Star Network Topology (all nodes have a connection to all nodes) X
 - Manage connections and keep them up X
-- Provide communication interface to abstract away the cluster
+- Provide communication interface to abstract away the cluster X
   (this should feel like one big App, even though it could be spread on 10 nodes/instances)
-- Provide Interface to create, read, update and delete cluster store resources
-  and find/set their location on the cluster.
 - Authenticate and Encrypt all Intra-Cluster Communication X
 
 */
@@ -43,8 +40,6 @@ type Nodosum struct {
 	onePasswordClient      *onepassword.Client
 	ml                     *memberlist.Memberlist
 	delegate               *Delegate
-	connInit               *connInit
-	listenerTcp            net.Listener
 	quicPort               int
 	quicTransport          *quic.Transport
 	quicConfig             *quic.Config
@@ -76,12 +71,6 @@ type quicApplicationStreams struct {
 	streams map[string]*quic.Stream
 }
 
-type connInit struct {
-	mu     sync.Mutex
-	val    uint32
-	tokens map[string]string
-}
-
 func New(cfg *Config) (*Nodosum, error) {
 	cfg.MemberlistConfig.AdvertiseAddr = "127.0.0.1"
 	cfg.MemberlistConfig.BindAddr = "127.0.0.1"
@@ -99,14 +88,6 @@ func New(cfg *Config) (*Nodosum, error) {
 		onepassword.WithServiceAccountToken(cfg.OnePasswordToken),
 		onepassword.WithIntegrationInfo("Mycorrizal auto Cert", "v1.0.0"),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	tcpLocalAddr := &net.TCPAddr{Port: cfg.ListenPort}
-	addrString := tcpLocalAddr.String()
-
-	listenerTcp, err := net.Listen("tcp", addrString)
 	if err != nil {
 		return nil, err
 	}
@@ -131,23 +112,17 @@ func New(cfg *Config) (*Nodosum, error) {
 	}
 
 	n := &Nodosum{
-		nodeId:   cfg.NodeId,
-		nodeMeta: cfg.NodeAddrs,
-		ctx:      ctx,
-		cancel:   cancel,
-		ml:       ml,
-		connInit: &connInit{
-			mu:     sync.Mutex{},
-			val:    rand.Uint32(),
-			tokens: make(map[string]string),
-		},
+		nodeId:                 cfg.NodeId,
+		nodeMeta:               cfg.NodeAddrs,
+		ctx:                    ctx,
+		cancel:                 cancel,
+		ml:                     ml,
 		onePasswordClient:      onePassClient,
 		quicPort:               cfg.QuicPort,
 		quicTransport:          quicTransport,
 		quicConfig:             quicConf,
 		quicConns:              &quicConns{conns: make(map[string]*quic.Conn)},
 		quicApplicationStreams: &quicApplicationStreams{streams: make(map[string]*quic.Stream)},
-		listenerTcp:            listenerTcp,
 		udpConn:                udpConn,
 		sharedSecret:           cfg.SharedSecret,
 		logger:                 cfg.Logger,
