@@ -182,6 +182,7 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 	n.quicApplicationStreams.streams[key] = stream
 	n.quicApplicationStreams.Unlock()
 
+	// Start incoming stream read loop to make request/response possible
 	go n.streamReadLoop(stream, nodeId, appId)
 
 	n.logger.Debug("Registered stream", "nodeId", nodeId, "appId", appId, "streamName", streamName)
@@ -207,7 +208,10 @@ func (n *Nodosum) handleRequest(stream *quic.Stream, appID string, frameData []b
 			CorrelationID: reqFrame.CorrelationID,
 			Error:         "application not found or no request handler",
 		}
-		sendResponseFrame(stream, respFrame)
+		err = sendResponseFrame(stream, respFrame)
+		if err != nil {
+			n.logger.Error("failed to send error response frame", "error", err)
+		}
 		return
 	}
 
@@ -223,7 +227,10 @@ func (n *Nodosum) handleRequest(stream *quic.Stream, appID string, frameData []b
 		respFrame.Error = err.Error()
 	}
 
-	sendResponseFrame(stream, respFrame)
+	err = sendResponseFrame(stream, respFrame)
+	if err != nil {
+		n.logger.Error("failed to send response frame", "error", err)
+	}
 }
 
 func (n *Nodosum) handleResponse(frameData []byte) {

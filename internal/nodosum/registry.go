@@ -28,7 +28,7 @@ func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, e
 	n.quicApplicationStreams.RLock()
 	if stream, ok := n.quicApplicationStreams.streams[key]; ok {
 		n.quicApplicationStreams.RUnlock()
-		n.logger.Debug("reusing cached stream", "key", key)
+		n.logger.Debug("reusing existing stream", "id", key)
 		return stream, nil
 	}
 	n.quicApplicationStreams.RUnlock()
@@ -42,7 +42,6 @@ func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, e
 			return nil, err
 		}
 
-		// CRITICAL FIX: Send sender's node ID (n.nodeId), not target node ID (nodeId)
 		streamInitFrame := encodeStreamInit(n.nodeId, app, name)
 		b, err := stream.Write(streamInitFrame)
 		if err != nil {
@@ -59,7 +58,7 @@ func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, e
 		// Start read loop for outgoing stream to handle responses
 		go n.streamReadLoop(stream, nodeId, app)
 
-		n.logger.Debug("created new stream", "key", key, "senderNodeId", n.nodeId, "targetNodeId", nodeId)
+		n.logger.Debug("created new stream", "id", key, "remoteNodeId", nodeId)
 		return stream, nil
 	}
 
@@ -72,7 +71,7 @@ func (n *Nodosum) closeQuicStream(id string) {
 		n.logger.Warn(fmt.Sprintf("closing quic stream for %s, but stream is nil", id))
 		return
 	}
-
+	n.logger.Debug(fmt.Sprintf("closing quic stream for %s", id))
 	err := stream.Close()
 	if err != nil {
 		n.logger.Error(fmt.Sprintf("error closing quic stream: %s", err.Error()))
@@ -84,6 +83,7 @@ func (n *Nodosum) closeQuicStream(id string) {
 func (n *Nodosum) closeAllQuicStreams() {
 	n.quicApplicationStreams.Lock()
 	defer n.quicApplicationStreams.Unlock()
+	n.logger.Debug("closing all quic streams")
 
 	for id, stream := range n.quicApplicationStreams.streams {
 		err := stream.Close()

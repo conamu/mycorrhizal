@@ -13,9 +13,11 @@ import (
 type Application interface {
 	// Send sends a Command to one or more Nodes specified by ID. Specifying no ID will broadcast the packet to all Nodes.
 	Send(payload []byte, ids []string) error
+	// Request sends a request to a target node, expecting a response before the timeout
 	Request(payload []byte, targetNode string, timeout time.Duration) ([]byte, error)
 	// SetReceiveFunc registers a function that is executed to handle the Command received.
 	SetReceiveFunc(func(payload []byte) error)
+	// SetRequestHandler sets a handling function with simple bytes in bytes out logic for req/res communication
 	SetRequestHandler(func([]byte, string) ([]byte, error))
 	// Nodes retrieves the ID info about nodes in the cluster to enable the application to work with the clusters resources.
 	Nodes() []string

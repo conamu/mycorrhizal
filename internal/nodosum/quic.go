@@ -9,8 +9,8 @@ import (
 const (
 	FRAME_TYPE_STREAM_INIT = 0x01 // First message on a new stream
 	FRAME_TYPE_DATA        = 0x02 // Subsequent data messages
-	FRAME_TYPE_REQUEST     = 0x03
-	FRAME_TYPE_RESPONSE    = 0x04
+	FRAME_TYPE_REQUEST     = 0x03 // Application API specific request frame, expects a FRAME_TYPE_RESPONSE
+	FRAME_TYPE_RESPONSE    = 0x04 // Application API specific response frame
 )
 
 type RequestFrame struct {
