@@ -21,6 +21,7 @@ import (
 
 type Mycorrizal interface {
 	Start() error
+	Ready(timeout time.Duration) error
 	Shutdown() error
 	RegisterApplication(uniqueIdentifier string) nodosum.Application
 	GetApplication(uniqueIdentifier string) nodosum.Application
@@ -41,6 +42,7 @@ type mycorrizal struct {
 	mycel           mycel.Mycel
 	debug           bool
 	debugHttpServer *http.Server
+	readyChan       chan any
 }
 
 func New(cfg *Config) (Mycorrizal, error) {
@@ -154,6 +156,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		nodosum:       ndsm,
 		mycel:         mcl,
 		debug:         cfg.Debug,
+		readyChan:     make(chan any),
 	}, nil
 }
 
@@ -203,7 +206,25 @@ func (mc *mycorrizal) Start() error {
 	mc.wg.Add(1)
 	wg.Wait()
 	mc.logger.Info("mycorrizal startup complete")
+	close(mc.readyChan)
 	return nil
+}
+
+func (mc *mycorrizal) Ready(timeout time.Duration) error {
+	if timeout == 0 {
+		timeout = time.Second * 30
+	}
+
+	for {
+		select {
+		case <-mc.readyChan:
+			return nil
+		case <-time.After(timeout):
+			return errors.New("timeout before mycorrizal could reach ready state")
+		case <-mc.ctx.Done():
+			return errors.New("context canceled")
+		}
+	}
 }
 
 func (mc *mycorrizal) Shutdown() error {

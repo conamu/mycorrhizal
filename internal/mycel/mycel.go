@@ -71,7 +71,11 @@ func New(cfg *Config) (Mycel, error) {
 		readyChan: make(chan any),
 	}
 
+	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
 	m.initCache()
+
+	m.app.SetReceiveFunc(m.cache.applicationReceiveFunc)
+	m.app.SetRequestHandler(m.cache.applicationRequestHandlerFunc)
 
 	return m, nil
 }
@@ -84,9 +88,6 @@ func (m *mycel) Start() error {
 		return errors.Join(errors.New("failed to initialize mycel"), err)
 	}
 	m.logger.Debug("starting mycel")
-
-	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
-	m.app.SetReceiveFunc(m.cache.applicationReceiveTask)
 
 	go worker.NewWorker(m.ctx, "tt-l-evictor", m.wg, m.cache.ttlEvictionWorkerTask, m.logger, 10*time.Second).Start()
 	close(m.readyChan)

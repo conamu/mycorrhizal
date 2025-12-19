@@ -18,7 +18,7 @@ type Application interface {
 	// SetReceiveFunc registers a function that is executed to handle the Command received.
 	SetReceiveFunc(func(payload []byte) error)
 	// SetRequestHandler sets a handling function with simple bytes in bytes out logic for req/res communication
-	SetRequestHandler(func([]byte, string) ([]byte, error))
+	SetRequestHandler(func(payload []byte, senderId string) (responsePayload []byte, err error))
 	// Nodes retrieves the ID info about nodes in the cluster to enable the application to work with the clusters resources.
 	Nodes() []string
 }
