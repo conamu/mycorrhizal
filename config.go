@@ -84,6 +84,7 @@ type Config struct {
 	CacheReplicaCount      int
 	MemberlistConfig       *memberlist.Config
 	QuicPort               int
+	Debug                  bool
 }
 
 func GetDefaultConfig() *Config {

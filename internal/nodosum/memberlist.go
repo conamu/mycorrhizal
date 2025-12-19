@@ -13,8 +13,12 @@ import (
 
 type Delegate struct {
 	*Nodosum
-	dialAttempts   map[string]int
-	dialAttemptsMu *sync.RWMutex
+	dta *delegateDialAttempts
+}
+
+type delegateDialAttempts struct {
+	sync.RWMutex
+	att map[string]int
 }
 
 func (d Delegate) NotifyJoin(node *memberlist.Node) {
@@ -32,9 +36,9 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 		d.quicConns.RUnlock()
 		d.logger.Debug("quic connection already exists", "node", node.Name)
 		// Reset dial attempts on successful existing connection
-		d.dialAttemptsMu.Lock()
-		delete(d.dialAttempts, node.Name)
-		d.dialAttemptsMu.Unlock()
+		d.dta.Lock()
+		delete(d.dta.att, node.Name)
+		d.dta.Unlock()
 		return
 	}
 	d.quicConns.RUnlock()
@@ -50,13 +54,13 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 	conn, err := d.quicTransport.Dial(dialCtx, addr, d.tlsConfig, d.quicConfig)
 	if err != nil {
 		// Track failed dial attempts for exponential backoff
-		d.dialAttemptsMu.Lock()
-		if d.dialAttempts == nil {
-			d.dialAttempts = make(map[string]int)
+		d.dta.Lock()
+		if d.dta == nil {
+			d.dta.att = make(map[string]int)
 		}
-		d.dialAttempts[node.Name]++
-		attempts := d.dialAttempts[node.Name]
-		d.dialAttemptsMu.Unlock()
+		d.dta.att[node.Name]++
+		attempts := d.dta.att[node.Name]
+		d.dta.Unlock()
 
 		d.logger.Error("error dialing quic connection", "error", err, "node", node.Name, "addr", addr.String(), "attempts", attempts)
 
@@ -90,9 +94,9 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 	d.quicConns.Unlock()
 
 	// Reset dial attempts on success
-	d.dialAttemptsMu.Lock()
-	delete(d.dialAttempts, node.Name)
-	d.dialAttemptsMu.Unlock()
+	d.dta.Lock()
+	delete(d.dta.att, node.Name)
+	d.dta.Unlock()
 
 	d.logger.Info("quic connection established",
 		"remoteServerName", node.Name,
@@ -103,9 +107,9 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 func (d Delegate) NotifyLeave(node *memberlist.Node) {
 	d.closeQuicConnection(node.Name)
 	// Clear dial attempts for this node
-	d.dialAttemptsMu.Lock()
-	delete(d.dialAttempts, node.Name)
-	d.dialAttemptsMu.Unlock()
+	d.dta.Lock()
+	delete(d.dta.att, node.Name)
+	d.dta.Unlock()
 	d.logger.Debug("node left", "node", node.Name)
 }
 
@@ -125,9 +129,9 @@ func (d Delegate) NotifyUpdate(node *memberlist.Node) {
 	d.quicConns.Unlock()
 
 	// Reset dial attempts for clean retry
-	d.dialAttemptsMu.Lock()
-	delete(d.dialAttempts, node.Name)
-	d.dialAttemptsMu.Unlock()
+	d.dta.Lock()
+	delete(d.dta.att, node.Name)
+	d.dta.Unlock()
 
 	// Reconnect with new metadata
 	go d.NotifyJoin(node)

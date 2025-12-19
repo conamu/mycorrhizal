@@ -134,8 +134,10 @@ func New(cfg *Config) (*Nodosum, error) {
 	}
 
 	delegate := &Delegate{
-		Nodosum:      n,
-		dialAttempts: make(map[string]int),
+		Nodosum: n,
+		dta: &delegateDialAttempts{
+			att: map[string]int{},
+		},
 	}
 	cfg.MemberlistConfig.Events = delegate
 	n.delegate = delegate
@@ -241,6 +243,10 @@ func (n *Nodosum) Shutdown() {
 		n.logger.Error("ml failed to leave properly", "err", err)
 	}
 	n.cancel()
+	err = n.udpConn.Close()
+	if err != nil {
+		n.logger.Error("failed to close UDP connection", "err", err)
+	}
 	n.logger.Debug("nodosum shutdown waiting on routines to exit...")
 	n.wg.Wait()
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"sync"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/conamu/mycorrizal/internal/mycel"
 	"github.com/conamu/mycorrizal/internal/nodosum"
 	"github.com/google/uuid"
+
+	_ "net/http/pprof"
 )
 
 type Mycorrizal interface {
@@ -25,17 +28,19 @@ type Mycorrizal interface {
 }
 
 type mycorrizal struct {
-	nodeId        string
-	ctx           context.Context
-	wg            *sync.WaitGroup
-	cancel        context.CancelFunc
-	logger        *slog.Logger
-	httpClient    *http.Client
-	discoveryMode int
-	nodeAddrs     []net.TCPAddr
-	singleMode    bool
-	nodosum       *nodosum.Nodosum
-	mycel         mycel.Mycel
+	nodeId          string
+	ctx             context.Context
+	wg              *sync.WaitGroup
+	cancel          context.CancelFunc
+	logger          *slog.Logger
+	httpClient      *http.Client
+	discoveryMode   int
+	nodeAddrs       []net.TCPAddr
+	singleMode      bool
+	nodosum         *nodosum.Nodosum
+	mycel           mycel.Mycel
+	debug           bool
+	debugHttpServer *http.Server
 }
 
 func New(cfg *Config) (Mycorrizal, error) {
@@ -148,12 +153,31 @@ func New(cfg *Config) (Mycorrizal, error) {
 		singleMode:    cfg.SingleMode,
 		nodosum:       ndsm,
 		mycel:         mcl,
+		debug:         cfg.Debug,
 	}, nil
 }
 
 func (mc *mycorrizal) Start() error {
 	mc.logger.Info("mycorrizal starting")
 	wg := &sync.WaitGroup{}
+
+	if mc.debug {
+		go func() {
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/debug/pprof/", pprof.Index)
+
+			srv := &http.Server{
+				Addr:    ":6060",
+				Handler: mux,
+			}
+
+			mc.debugHttpServer = srv
+
+			mc.logger.Warn(srv.ListenAndServe().Error())
+		}()
+	}
+
 	wg.Go(func() {
 		mc.nodosum.Start()
 		err := mc.nodosum.Ready(time.Second * 30)
@@ -194,6 +218,10 @@ func (mc *mycorrizal) Shutdown() error {
 		mc.mycel.Shutdown()
 		mc.wg.Done()
 	})
+
+	if mc.debugHttpServer != nil {
+		mc.debugHttpServer.Close()
+	}
 
 	mc.cancel()
 	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
