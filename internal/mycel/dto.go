@@ -1,13 +1,7 @@
 package mycel
 
-type cacheRequestType int
-
 const (
-	GET cacheRequestType = iota
+	GET    uint8 = 0x00
+	SET    uint8 = 0x01
+	DELETE uint8 = 0x02
 )
-
-type cacheRequest struct {
-	requestType cacheRequestType
-	key         string
-	data        any
-}

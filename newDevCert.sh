@@ -1,0 +1,1 @@
+openssl req -x509 -newkey rsa:4096 -keyout ca-key.pem -out ca-cert.pem -days 3650 -nodes -subj "/CN=Mycorrizal CA/O=Mycorrizal"

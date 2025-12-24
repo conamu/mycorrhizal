@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"sync"
 	"time"
@@ -14,10 +15,13 @@ import (
 	"github.com/conamu/mycorrizal/internal/mycel"
 	"github.com/conamu/mycorrizal/internal/nodosum"
 	"github.com/google/uuid"
+
+	_ "net/http/pprof"
 )
 
 type Mycorrizal interface {
 	Start() error
+	Ready(timeout time.Duration) error
 	Shutdown() error
 	RegisterApplication(uniqueIdentifier string) nodosum.Application
 	GetApplication(uniqueIdentifier string) nodosum.Application
@@ -25,17 +29,20 @@ type Mycorrizal interface {
 }
 
 type mycorrizal struct {
-	nodeId        string
-	ctx           context.Context
-	wg            *sync.WaitGroup
-	cancel        context.CancelFunc
-	logger        *slog.Logger
-	httpClient    *http.Client
-	discoveryMode int
-	nodeAddrs     []net.TCPAddr
-	singleMode    bool
-	nodosum       *nodosum.Nodosum
-	mycel         mycel.Mycel
+	nodeId          string
+	ctx             context.Context
+	wg              *sync.WaitGroup
+	cancel          context.CancelFunc
+	logger          *slog.Logger
+	httpClient      *http.Client
+	discoveryMode   int
+	nodeAddrs       []net.TCPAddr
+	singleMode      bool
+	nodosum         *nodosum.Nodosum
+	mycel           mycel.Mycel
+	debug           bool
+	debugHttpServer *http.Server
+	readyChan       chan any
 }
 
 func New(cfg *Config) (Mycorrizal, error) {
@@ -103,20 +110,18 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	nodosumConfig := &nodosum.Config{
-		NodeId:                 id,
-		NodeAddrs:              &nodeMeta,
-		Ctx:                    ctx,
-		ListenPort:             cfg.ListenPort,
-		Logger:                 cfg.Logger,
-		Wg:                     &sync.WaitGroup{},
-		HandshakeTimeout:       cfg.HandshakeTimeout,
-		SharedSecret:           cfg.SharedSecret,
-		TlsEnabled:             cfg.ClusterTLSEnabled,
-		TlsHostName:            cfg.ClusterTLSHostName,
-		TlsCACert:              cfg.ClusterTLSCACert,
-		TlsCert:                cfg.ClusterTLSCert,
-		MultiplexerBufferSize:  cfg.MultiplexerBufferSize,
-		MultiplexerWorkerCount: cfg.MultiplexerWorkerCount,
+		NodeId:           id,
+		NodeAddrs:        &nodeMeta,
+		Ctx:              ctx,
+		ListenPort:       cfg.ListenPort,
+		Logger:           cfg.Logger,
+		Wg:               &sync.WaitGroup{},
+		HandshakeTimeout: cfg.HandshakeTimeout,
+		SharedSecret:     cfg.SharedSecret,
+		TlsCACert:        cfg.ClusterTLSCACert,
+		OnePasswordToken: cfg.OnePassToken,
+		MemberlistConfig: cfg.MemberlistConfig,
+		QuicPort:         cfg.QuicPort,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)
@@ -150,19 +155,35 @@ func New(cfg *Config) (Mycorrizal, error) {
 		singleMode:    cfg.SingleMode,
 		nodosum:       ndsm,
 		mycel:         mcl,
+		debug:         cfg.Debug,
+		readyChan:     make(chan any),
 	}, nil
 }
 
 func (mc *mycorrizal) Start() error {
 	mc.logger.Info("mycorrizal starting")
 	wg := &sync.WaitGroup{}
+
+	if mc.debug {
+		go func() {
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/debug/pprof/", pprof.Index)
+
+			srv := &http.Server{
+				Addr:    ":6060",
+				Handler: mux,
+			}
+
+			mc.debugHttpServer = srv
+
+			mc.logger.Warn(srv.ListenAndServe().Error())
+		}()
+	}
+
 	wg.Go(func() {
-		err := mc.nodosum.Start()
-		if err != nil {
-			mc.logger.Error(err.Error())
-			mc.cancel()
-		}
-		err = mc.nodosum.Ready(time.Second * 30)
+		mc.nodosum.Start()
+		err := mc.nodosum.Ready(time.Second * 30)
 		if err != nil {
 			mc.logger.Error(err.Error())
 			mc.cancel()
@@ -185,7 +206,25 @@ func (mc *mycorrizal) Start() error {
 	mc.wg.Add(1)
 	wg.Wait()
 	mc.logger.Info("mycorrizal startup complete")
+	close(mc.readyChan)
 	return nil
+}
+
+func (mc *mycorrizal) Ready(timeout time.Duration) error {
+	if timeout == 0 {
+		timeout = time.Second * 30
+	}
+
+	for {
+		select {
+		case <-mc.readyChan:
+			return nil
+		case <-time.After(timeout):
+			return errors.New("timeout before mycorrizal could reach ready state")
+		case <-mc.ctx.Done():
+			return errors.New("context canceled")
+		}
+	}
 }
 
 func (mc *mycorrizal) Shutdown() error {
@@ -200,6 +239,10 @@ func (mc *mycorrizal) Shutdown() error {
 		mc.mycel.Shutdown()
 		mc.wg.Done()
 	})
+
+	if mc.debugHttpServer != nil {
+		mc.debugHttpServer.Close()
+	}
 
 	mc.cancel()
 	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
