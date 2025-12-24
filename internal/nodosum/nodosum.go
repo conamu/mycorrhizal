@@ -108,7 +108,9 @@ func New(cfg *Config) (*Nodosum, error) {
 	}
 
 	quicConf := &quic.Config{
-		Versions: []quic.Version{quic.Version2},
+		Versions:        []quic.Version{quic.Version2},
+		MaxIdleTimeout:  time.Minute * 2,
+		KeepAlivePeriod: time.Second * 10,
 	}
 
 	n := &Nodosum{
