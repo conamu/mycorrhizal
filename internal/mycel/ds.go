@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -36,6 +37,7 @@ Other allowed interactions:
 
 func (m *mycel) initCache() {
 	m.cache = &cache{
+		logger:           m.logger,
 		nodeId:           m.ndsm.Id(),
 		app:              m.app,
 		keyVal:           &keyVal{data: make(map[string]*node)},
@@ -47,6 +49,7 @@ func (m *mycel) initCache() {
 // cache holds references to all nodes and buckets protected by mu
 type cache struct {
 	sync.WaitGroup
+	logger           *slog.Logger
 	nodeId           string
 	app              nodosum.Application
 	keyVal           *keyVal
@@ -111,6 +114,7 @@ func (c *cache) score(key, nodeId string) uint64 {
 // getReplicas calculates replicas scores for cache key. Returned slice is sorted by highest score.
 func (c *cache) getReplicas(key string) []replicaNode {
 	nodes := c.app.Nodes()
+	nodes = append(nodes, c.nodeId)
 	var scoredNodes []replicaNode
 
 	for _, nodeId := range nodes {

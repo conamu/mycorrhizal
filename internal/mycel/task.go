@@ -1,7 +1,7 @@
 package mycel
 
 import (
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,11 +47,23 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 	w.Logger.Debug("eviction done")
 }
 
-func (c *cache) applicationReceiveTask(payload []byte) error {
-	req := cacheRequest{}
-	_, err := binary.Decode(payload, binary.LittleEndian, &req)
-	if err != nil {
-
-	}
+func (c *cache) applicationReceiveFunc(payload []byte) error {
 	return nil
+}
+
+func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) ([]byte, error) {
+	if len(payload) == 0 {
+		return nil, errors.New("empty cache request payload")
+	}
+
+	switch payload[0] {
+	case GET:
+		c.logger.Debug(fmt.Sprintf("received GET request from %s", senderId))
+	case SET:
+		c.logger.Debug(fmt.Sprintf("received SET request from %s", senderId))
+	case DELETE:
+		c.logger.Debug(fmt.Sprintf("received DELETE request from %s", senderId))
+	}
+
+	return nil, nil
 }
