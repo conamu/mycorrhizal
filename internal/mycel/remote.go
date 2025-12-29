@@ -16,7 +16,7 @@ func (c *cache) getRemote(bucket, key string) ([]byte, error) {
 	return res, nil
 }
 
-func (c *cache) setRemote(bucket, key string, value []byte, ttl time.Duration) error {
+func (c *cache) setRemote(bucket, key string, value any, ttl time.Duration) error {
 
 	buf := make([]byte, 1)
 

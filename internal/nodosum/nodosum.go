@@ -72,18 +72,6 @@ type quicApplicationStreams struct {
 }
 
 func New(cfg *Config) (*Nodosum, error) {
-	cfg.MemberlistConfig.AdvertiseAddr = "127.0.0.1"
-	cfg.MemberlistConfig.BindAddr = "127.0.0.1"
-	cfg.MemberlistConfig.LogOutput = os.Stdout
-	cfg.MemberlistConfig.SecretKey = []byte(cfg.SharedSecret)
-	cfg.MemberlistConfig.Name = cfg.NodeId
-	cfg.MemberlistConfig.TCPTimeout = time.Second * 3
-
-	ml, err := memberlist.Create(cfg.MemberlistConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	onePassClient, err := onepassword.NewClient(cfg.Ctx,
 		onepassword.WithServiceAccountToken(cfg.OnePasswordToken),
 		onepassword.WithIntegrationInfo("Mycorrizal auto Cert", "v1.0.0"),
@@ -118,7 +106,6 @@ func New(cfg *Config) (*Nodosum, error) {
 		nodeMeta:               cfg.NodeAddrs,
 		ctx:                    ctx,
 		cancel:                 cancel,
-		ml:                     ml,
 		onePasswordClient:      onePassClient,
 		quicPort:               cfg.QuicPort,
 		quicTransport:          quicTransport,
@@ -141,8 +128,23 @@ func New(cfg *Config) (*Nodosum, error) {
 			att: map[string]int{},
 		},
 	}
+
 	cfg.MemberlistConfig.Events = delegate
+	cfg.MemberlistConfig.Delegate = delegate
+	cfg.MemberlistConfig.AdvertiseAddr = "127.0.0.1"
+	cfg.MemberlistConfig.BindAddr = "127.0.0.1"
+	cfg.MemberlistConfig.LogOutput = os.Stdout
+	cfg.MemberlistConfig.SecretKey = []byte(cfg.SharedSecret)
+	cfg.MemberlistConfig.Name = cfg.NodeId
+	cfg.MemberlistConfig.TCPTimeout = time.Second * 3
+
+	ml, err := memberlist.Create(cfg.MemberlistConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	n.delegate = delegate
+	n.ml = ml
 
 	nodeCert, caCert, err := n.generateNodeCert()
 	if err != nil {
@@ -168,10 +170,24 @@ func New(cfg *Config) (*Nodosum, error) {
 	return n, nil
 }
 
+// createDialTLSConfig creates a TLS config for dialing a specific remote node.
+// It clones the base TLS config and sets the ServerName to the remote node's ID
+// to ensure proper certificate verification during the TLS handshake.
+func (n *Nodosum) createDialTLSConfig(remoteNodeID string) *tls.Config {
+	// Clone the base config to avoid modifying the shared instance
+	dialConfig := n.tlsConfig.Clone()
+
+	// Set ServerName to the remote node's ID for proper certificate verification
+	dialConfig.ServerName = remoteNodeID
+
+	return dialConfig
+}
+
 func (n *Nodosum) Start() {
 	defer func() {
 		if r := recover(); r != nil {
 			n.logger.Error("panic in Start() recovered", "panic", r)
+			n.cancel()
 			close(n.readyChan) // Still signal (though with error state)
 			panic(r)           // Re-panic after cleanup
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -206,6 +207,7 @@ func (mc *mycorrizal) Start() error {
 	mc.wg.Add(1)
 	wg.Wait()
 	mc.logger.Info("mycorrizal startup complete")
+	mc.logger.Debug(fmt.Sprintf("mycorrizal node id %s", mc.nodeId))
 	close(mc.readyChan)
 	return nil
 }

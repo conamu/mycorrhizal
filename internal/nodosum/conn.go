@@ -62,6 +62,27 @@ func (n *Nodosum) handleQuicConn(conn *quic.Conn) {
 	}
 	nodeID := tlsState.PeerCertificates[0].Subject.CommonName
 
+	// Validate certificate CommonName
+	if nodeID == "" {
+		n.logger.Error("peer certificate has empty CommonName",
+			"remoteAddr", conn.RemoteAddr().String())
+		conn.CloseWithError(0, "invalid certificate: empty CommonName")
+		return
+	}
+
+	// CRITICAL: Reject self-connections immediately
+	if nodeID == n.nodeId {
+		n.logger.Error("rejecting incoming self-connection",
+			"nodeID", nodeID,
+			"localNodeID", n.nodeId,
+			"remoteAddr", conn.RemoteAddr().String(),
+			"localAddr", conn.LocalAddr().String(),
+			"hint", "check NodeAddrs configuration for address conflicts or loopback addresses",
+		)
+		conn.CloseWithError(0, "self-connection not allowed")
+		return
+	}
+
 	// Register this connection so we can send messages back to this node
 	// Only register if no connection exists (prefer outgoing dial connections)
 	shouldRegister := false
