@@ -56,7 +56,7 @@ func (n *Nodosum) getOrOpenQuicStream(nodeId, app, name string) (*quic.Stream, e
 		n.quicApplicationStreams.Unlock()
 
 		// Start read loop for outgoing stream to handle responses
-		go n.streamReadLoop(stream, nodeId, app)
+		go n.streamReadLoop(stream, nodeId, app, name)
 
 		n.logger.Debug("created new stream", "id", key, "remoteNodeId", nodeId)
 		return stream, nil

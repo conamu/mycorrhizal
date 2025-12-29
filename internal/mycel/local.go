@@ -65,7 +65,10 @@ func (c *cache) setLocal(bucket, key string, value any, ttl time.Duration) error
 		evictedNode.next = nil
 		evictedNode.prev = nil
 		evictedNode.data = nil
-		c.keyVal.Delete(evictedNode.key)
+		c.keyVal.Delete(bucket + evictedNode.key)
+		c.nodeScoreHashMap.Lock()
+		delete(c.nodeScoreHashMap.data, bucket+key)
+		c.nodeScoreHashMap.Unlock()
 		b.len--
 	}
 
@@ -80,5 +83,8 @@ func (c *cache) deleteLocal(bucket, key string) error {
 	}
 	b.Delete(key)
 	c.keyVal.Delete(bucket + key)
+	c.nodeScoreHashMap.Lock()
+	delete(c.nodeScoreHashMap.data, bucket+key)
+	c.nodeScoreHashMap.Unlock()
 	return nil
 }
