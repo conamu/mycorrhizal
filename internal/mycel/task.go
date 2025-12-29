@@ -48,6 +48,7 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 }
 
 func (c *cache) applicationReceiveFunc(payload []byte) error {
+	c.logger.Warn("application receive function not set")
 	return nil
 }
 

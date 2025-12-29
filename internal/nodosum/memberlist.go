@@ -2,6 +2,7 @@ package nodosum
 
 import (
 	"context"
+	"encoding/binary"
 	"net"
 	"runtime/debug"
 	"strconv"
@@ -29,6 +30,11 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 		}
 	}()
 
+	if node.Name == d.nodeId {
+		d.logger.Debug("node is self, skipping NodeJoin()")
+		return
+	}
+
 	d.logger.Debug("NotifyJoin called", "node", node.Name, "addr", node.Addr.String())
 
 	d.quicConns.RLock()
@@ -43,7 +49,9 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 	}
 	d.quicConns.RUnlock()
 
-	addr, err := net.ResolveUDPAddr("udp", node.Addr.String()+":"+strconv.Itoa(d.quicPort))
+	quicPort := binary.BigEndian.Uint16(node.Meta[:2])
+
+	addr, err := net.ResolveUDPAddr("udp", node.Addr.String()+":"+strconv.Itoa(int(quicPort)))
 	if err != nil {
 		d.logger.Error("error resolving quic address", "error", err, "node", node.Name)
 		return
@@ -51,7 +59,10 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 
 	dialCtx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
 	defer cancel()
-	conn, err := d.quicTransport.Dial(dialCtx, addr, d.tlsConfig, d.quicConfig)
+
+	// Create TLS config with the remote node's ID as ServerName for proper certificate verification
+	dialTLSConfig := d.createDialTLSConfig(node.Name)
+	conn, err := d.quicTransport.Dial(dialCtx, addr, dialTLSConfig, d.quicConfig)
 	if err != nil {
 		// Track failed dial attempts for exponential backoff
 		d.dta.Lock()
@@ -99,9 +110,10 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 	d.dta.Unlock()
 
 	d.logger.Info("quic connection established",
-		"remoteServerName", node.Name,
+		"remoteNodeID", node.Name,
 		"remoteAddr", conn.RemoteAddr().String(),
-		"localTlsServerName", conn.ConnectionState().TLS.ServerName)
+		"tlsServerName", conn.ConnectionState().TLS.ServerName,
+		"peerCertCN", conn.ConnectionState().TLS.PeerCertificates[0].Subject.CommonName)
 }
 
 func (d Delegate) NotifyLeave(node *memberlist.Node) {
@@ -182,4 +194,27 @@ func (d Delegate) NotifyMerge(peers []*memberlist.Node) error {
 	}
 
 	return nil
+}
+
+// NodeMeta is used to exchange quic connection info
+func (d Delegate) NodeMeta(limit int) []byte {
+	portBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(portBytes, uint16(d.quicPort))
+	return portBytes
+}
+
+func (d Delegate) NotifyMsg(bytes []byte) {
+	return
+}
+
+func (d Delegate) GetBroadcasts(overhead, limit int) [][]byte {
+	return nil
+}
+
+func (d Delegate) LocalState(join bool) []byte {
+	return nil
+}
+
+func (d Delegate) MergeRemoteState(buf []byte, join bool) {
+	return
 }

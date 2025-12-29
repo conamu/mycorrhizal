@@ -32,30 +32,36 @@ type mycel struct {
 
 /*
 
-Mycel is built with 2 types of caches in mind
+Mycel is built to be a simple distributed caching and storage layer with eventual persistence.
+its API supports Get, Set, Delete, and SetTTL.
 
-1. Standard cache with LRU eviction + instant eventual persistence in file-based s3 storage.
+The cache has 3 main functionalities:
+LRU eviction, TTL eviction, eventual persistence on S3 based storage.
 
-2. Fast Access cache with LRU and TTL based eviction
+Nodes have their own local ephemeral in memory storage.
+This is organized in Buckets. Every bucket has its own LRU and TTL configuration.
+Single items can have differing TTL configurations as well.
 
-both types are fully replicated on all nodes
+If a bucket is set as persisted, all data  will be stored.
+The Bucket will hold any data according to its LRU and TTL configuration.
+If data ways evicted it can be looked up from the s3 based storage
 
-A leader is elected with a simple algorithm, including healthchecks and rapid new election.
-Every node has a WAL so no records are missed in case leader is down for a short period
+The data is replicated across a minimum of 3 nodes. Owner and backup nodes are calculated by rendezvouz hashing.
 
-Leader is responsible for managing the Distributed linked list structure
+All data lives locally on the nodes, organized in buckets. LRUs and TTLs are Node scoped.
+Data of one bucket can exist on many different nodes.
+Buckets are logical constraints for access control and organization.
 
-Leader:
-- Double linked list with record ids and origin node id in case data is not yet synced across the cluster
-	- sends signal to evict record id
+If a key can not be found locally, the owner node is calculated and a request to retrieve the keys value is sent.
+If it times out, the backup nodes are requested.
+If this happens too often or the owner node is already marked dead from memberlist
+the new owner is calculated and the keys rebalance across the cluster with new backup nodes.
 
-- Hashmap to map to records -> can be used for partial replication of data, saving memory in the future
-- Partial replication algorithm can be based on bucket hashing or a trie data structure.
+storage and transfer encoding is gob.
 
-Nodes:
-- Hold data with record ids
-- Access data
-- Control of data tied to leader
+Local data is accessed though direct pointers, only transfers and storage gets gob encoding.
+
+Explore using S3 for replication/data log in comparison to directly transfering all data to a new node.
 
 */
 
