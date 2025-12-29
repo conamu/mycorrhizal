@@ -72,3 +72,13 @@ func (c *cache) setLocal(bucket, key string, value any, ttl time.Duration) error
 	return nil
 
 }
+
+func (c *cache) deleteLocal(bucket, key string) error {
+	b, err := c.lruBuckets.GetBucket(bucket)
+	if err != nil {
+		return err
+	}
+	b.Delete(key)
+	c.keyVal.Delete(bucket + key)
+	return nil
+}

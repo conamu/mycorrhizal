@@ -87,6 +87,11 @@ func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) (
 		return []byte("REMOTE SET OK"), nil
 	case DELETE:
 		c.logger.Debug(fmt.Sprintf("received DELETE request from %s", senderId))
+		err = c.deleteLocal(res.Bucket, res.Key)
+		if err != nil {
+			return nil, err
+		}
+		return []byte("REMOTE DELETE OK"), nil
 	}
 
 	return nil, nil
