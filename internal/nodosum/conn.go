@@ -204,7 +204,7 @@ func (n *Nodosum) handleStream(stream *quic.Stream) {
 	n.quicApplicationStreams.Unlock()
 
 	// Start incoming stream read loop to make request/response possible
-	go n.streamReadLoop(stream, nodeId, appId)
+	go n.streamReadLoop(stream, nodeId, appId, streamName)
 
 	n.logger.Debug("Registered stream", "nodeId", nodeId, "appId", appId, "streamName", streamName)
 }
@@ -287,9 +287,11 @@ func (n *Nodosum) handleResponse(frameData []byte) {
 	n.logger.Warn("received response for unknown request", "correlationID", respFrame.CorrelationID)
 }
 
-func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID string) {
+func (n *Nodosum) streamReadLoop(stream *quic.Stream, nodeID, appID, name string) {
 	defer func() {
 		stream.Close()
+		n.quicApplicationStreams.Lock()
+		delete(n.quicApplicationStreams.streams, nodeID+":"+appID+":"+name)
 		n.logger.Debug("stream read loop closed", "nodeId", nodeID, "appId", appID)
 	}()
 

@@ -250,6 +250,7 @@ func (l *lruBucket) Delete(key string) {
 			n.Lock()
 			n.next = nil
 			n.prev = nil
+			n.data = nil
 			n.Unlock()
 
 			l.len--
