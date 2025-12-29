@@ -57,11 +57,34 @@ func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) (
 		return nil, errors.New("empty cache request payload")
 	}
 
-	switch payload[0] {
+	res, err := c.gobDecode(payload)
+	if err != nil {
+		return nil, err
+	}
+	c.logger.Debug(fmt.Sprintf("received SET request from %s", senderId))
+
+	switch res.Operation {
 	case GET:
 		c.logger.Debug(fmt.Sprintf("received GET request from %s", senderId))
+		val, err := c.getLocal(res.Bucket, res.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		return c.gobEncode(remoteCachePayload{
+			Operation: RESPONSE,
+			Key:       res.Key,
+			Bucket:    res.Bucket,
+			Value:     val,
+			Ttl:       0,
+		})
 	case SET:
 		c.logger.Debug(fmt.Sprintf("received SET request from %s", senderId))
+		err = c.setLocal(res.Bucket, res.Key, res.Value, res.Ttl)
+		if err != nil {
+			return nil, err
+		}
+		return []byte("REMOTE SET OK"), nil
 	case DELETE:
 		c.logger.Debug(fmt.Sprintf("received DELETE request from %s", senderId))
 	}
