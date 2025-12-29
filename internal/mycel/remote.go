@@ -51,3 +51,27 @@ func (c *cache) setRemote(bucket, key string, value any, ttl time.Duration) erro
 	c.logger.Debug(string(res))
 	return nil
 }
+
+func (c *cache) deleteRemote(bucket, key string) error {
+	c.nodeScoreHashMap.RLock()
+	target := c.nodeScoreHashMap.data[bucket+key]
+	c.nodeScoreHashMap.RUnlock()
+
+	payload, err := c.gobEncode(remoteCachePayload{
+		Operation: DELETE,
+		Key:       key,
+		Bucket:    bucket,
+	})
+	if err != nil {
+		return err
+	}
+
+	res, err := c.app.Request(payload, target, time.Millisecond*100)
+	if err != nil {
+		return err
+	}
+
+	c.logger.Debug(string(res))
+
+	return nil
+}

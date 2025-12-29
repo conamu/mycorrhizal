@@ -52,13 +52,13 @@ to find the node and stitch the lru instead of finding the node through iteratio
 */
 
 func (c *cache) Delete(bucket, key string) error {
-	b, err := c.lruBuckets.GetBucket(bucket)
-	if err != nil {
-		return err
+	if c.isLocal(bucket, key) {
+		c.logger.Debug(fmt.Sprintf("cache delete local for key %s on bucket %s", key, bucket))
+		return c.deleteLocal(bucket, key)
 	}
-	b.Delete(key)
-	c.keyVal.Delete(bucket + key)
-	return nil
+
+	c.logger.Debug(fmt.Sprintf("cache delete remote for key %s on bucket %s", key, bucket))
+	return c.deleteRemote(bucket, key)
 }
 
 func (c *cache) SetTtl(bucket, key string, ttl time.Duration) {
