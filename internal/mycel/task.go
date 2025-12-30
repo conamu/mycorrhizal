@@ -85,6 +85,13 @@ func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) (
 			return nil, err
 		}
 		return []byte("REMOTE SET OK"), nil
+	case SETTTL:
+		c.logger.Debug(fmt.Sprintf("received SETTTL request from %s", senderId))
+		err = c.setTtlLocal(res.Bucket, res.Key, res.Ttl)
+		if err != nil {
+			return nil, err
+		}
+		return []byte("REMOTE SET TTL OK"), nil
 	case DELETE:
 		c.logger.Debug(fmt.Sprintf("received DELETE request from %s", senderId))
 		err = c.deleteLocal(res.Bucket, res.Key)
@@ -94,5 +101,5 @@ func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) (
 		return []byte("REMOTE DELETE OK"), nil
 	}
 
-	return nil, nil
+	return nil, errors.New("unknown operation for request")
 }
