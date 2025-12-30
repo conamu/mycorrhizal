@@ -1,6 +1,9 @@
 package mycel
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 func (c *cache) getLocal(bucket, key string) (any, error) {
 	if n := c.keyVal.Get(bucket + key); n != nil {
@@ -86,5 +89,17 @@ func (c *cache) deleteLocal(bucket, key string) error {
 	c.nodeScoreHashMap.Lock()
 	delete(c.nodeScoreHashMap.data, bucket+key)
 	c.nodeScoreHashMap.Unlock()
+	return nil
+}
+
+func (c *cache) setTtlLocal(bucket, key string, ttl time.Duration) error {
+	n := c.keyVal.Get(bucket + key)
+	if n == nil {
+		return errors.New("key not found")
+	}
+	n.Lock()
+	defer n.Unlock()
+	n.expiresAt = time.Now().Add(ttl)
+	c.keyVal.Set(bucket+key, n)
 	return nil
 }

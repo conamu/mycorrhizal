@@ -16,7 +16,7 @@ type Cache interface {
 	Get(bucket, key string) (any, error)
 	Set(bucket, key string, value any, ttl time.Duration) error
 	Delete(bucket, key string) error
-	SetTtl(bucket, key string, ttl time.Duration)
+	SetTtl(bucket, key string, ttl time.Duration) error
 }
 
 func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
@@ -61,16 +61,14 @@ func (c *cache) Delete(bucket, key string) error {
 	return c.deleteRemote(bucket, key)
 }
 
-func (c *cache) SetTtl(bucket, key string, ttl time.Duration) {
-	n := c.keyVal.Get(bucket + key)
-	if n == nil {
-		return
+func (c *cache) SetTtl(bucket, key string, ttl time.Duration) error {
+	if c.isLocal(bucket, key) {
+		c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
+		return c.setTtlLocal(bucket, key, ttl)
 	}
-	n.Lock()
-	defer n.Unlock()
-	n.expiresAt = time.Now().Add(ttl)
-	c.keyVal.Set(bucket+key, n)
-	return
+
+	c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
+	return c.setTtlRemote(bucket, key, ttl)
 }
 
 func (c *cache) isLocal(bucket, key string) bool {

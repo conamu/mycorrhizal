@@ -75,3 +75,22 @@ func (c *cache) deleteRemote(bucket, key string) error {
 
 	return nil
 }
+
+func (c *cache) setTtlRemote(bucket, key string, ttl time.Duration) error {
+	payload, err := c.gobEncode(remoteCachePayload{
+		Operation: SETTTL,
+		Key:       key,
+		Bucket:    bucket,
+		Ttl:       ttl,
+	})
+	if err != nil {
+		return err
+	}
+
+	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], time.Millisecond*100)
+	if err != nil {
+		return err
+	}
+	c.logger.Debug(string(res))
+	return nil
+}
