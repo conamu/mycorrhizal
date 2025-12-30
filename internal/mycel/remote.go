@@ -18,7 +18,7 @@ func (c *cache) getRemote(bucket, key string) (any, error) {
 		return nil, err
 	}
 
-	res, err := c.app.Request(payload, target, time.Millisecond*100)
+	res, err := c.app.Request(payload, target, c.remoteTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (c *cache) setRemote(bucket, key string, value any, ttl time.Duration) erro
 		return err
 	}
 
-	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], time.Millisecond*100)
+	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], c.remoteTimeout)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (c *cache) deleteRemote(bucket, key string) error {
 		return err
 	}
 
-	res, err := c.app.Request(payload, target, time.Millisecond*100)
+	res, err := c.app.Request(payload, target, c.remoteTimeout)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (c *cache) setTtlRemote(bucket, key string, ttl time.Duration) error {
 		return err
 	}
 
-	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], time.Millisecond*100)
+	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], c.remoteTimeout)
 	if err != nil {
 		return err
 	}

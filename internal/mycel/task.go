@@ -76,7 +76,6 @@ func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) (
 			Key:       res.Key,
 			Bucket:    res.Bucket,
 			Value:     val,
-			Ttl:       0,
 		})
 	case SET:
 		c.logger.Debug(fmt.Sprintf("received SET request from %s", senderId))

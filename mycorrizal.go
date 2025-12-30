@@ -132,10 +132,11 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	mycelConfig := &mycel.Config{
-		Ctx:          ctx,
-		Logger:       cfg.Logger,
-		Nodosum:      ndsm,
-		ReplicaCount: cfg.CacheReplicaCount,
+		Ctx:           ctx,
+		Logger:        cfg.Logger,
+		Nodosum:       ndsm,
+		Replicas:      cfg.CacheReplicaCount,
+		RemoteTimeout: cfg.HandshakeTimeout,
 	}
 
 	mcl, err := mycel.New(mycelConfig)

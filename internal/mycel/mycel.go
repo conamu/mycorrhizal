@@ -19,15 +19,16 @@ type Mycel interface {
 }
 
 type mycel struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           *sync.WaitGroup
-	logger       *slog.Logger
-	ndsm         *nodosum.Nodosum
-	app          nodosum.Application
-	readyChan    chan any
-	cache        *cache
-	replicaCount int
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            *sync.WaitGroup
+	logger        *slog.Logger
+	ndsm          *nodosum.Nodosum
+	app           nodosum.Application
+	readyChan     chan any
+	cache         *cache
+	replicas      int
+	remoteTimeout time.Duration
 }
 
 /*
@@ -69,12 +70,14 @@ func New(cfg *Config) (Mycel, error) {
 	ctx, cancel := context.WithCancel(cfg.Ctx)
 
 	m := &mycel{
-		ctx:       ctx,
-		cancel:    cancel,
-		wg:        &sync.WaitGroup{},
-		logger:    cfg.Logger,
-		ndsm:      cfg.Nodosum,
-		readyChan: make(chan any),
+		ctx:           ctx,
+		cancel:        cancel,
+		wg:            &sync.WaitGroup{},
+		logger:        cfg.Logger,
+		ndsm:          cfg.Nodosum,
+		readyChan:     make(chan any),
+		replicas:      cfg.Replicas,
+		remoteTimeout: cfg.RemoteTimeout,
 	}
 
 	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
