@@ -35,6 +35,14 @@ Other allowed interactions:
 
 */
 
+const (
+	GET      uint8 = 0x00
+	SET      uint8 = 0x01
+	SETTTL         = 0x02
+	DELETE   uint8 = 0x03
+	RESPONSE uint8 = 0x04
+)
+
 func (m *mycel) initCache() {
 	m.cache = &cache{
 		logger:           m.logger,
@@ -43,6 +51,8 @@ func (m *mycel) initCache() {
 		keyVal:           &keyVal{data: make(map[string]*node)},
 		lruBuckets:       &lruBuckets{data: make(map[string]*lruBucket)},
 		nodeScoreHashMap: &remoteCacheNodeHashMap{data: make(map[string]string)},
+		replicas:         m.replicas,
+		remoteTimeout:    m.remoteTimeout,
 	}
 }
 
@@ -55,6 +65,8 @@ type cache struct {
 	keyVal           *keyVal
 	lruBuckets       *lruBuckets
 	nodeScoreHashMap *remoteCacheNodeHashMap
+	replicas         int
+	remoteTimeout    time.Duration
 }
 
 type keyVal struct {

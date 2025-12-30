@@ -1,7 +1,6 @@
 package mycel
 
 import (
-	"errors"
 	"time"
 )
 
@@ -95,7 +94,7 @@ func (c *cache) deleteLocal(bucket, key string) error {
 func (c *cache) setTtlLocal(bucket, key string, ttl time.Duration) error {
 	n := c.keyVal.Get(bucket + key)
 	if n == nil {
-		return errors.New("key not found")
+		return ERR_NOT_FOUND
 	}
 	n.Lock()
 	defer n.Unlock()

@@ -82,12 +82,13 @@ type Config struct {
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 	CacheReplicaCount      int
+	CacheRemoteTimeout     time.Duration
 	MemberlistConfig       *memberlist.Config
 	QuicPort               int
 	Debug                  bool
 }
 
-func GetDefaultConfig() *Config {
+func GetDefaultClusterConfig() *Config {
 
 	return &Config{
 		Ctx: context.Background(),
@@ -102,5 +103,11 @@ func GetDefaultConfig() *Config {
 		MultiplexerBufferSize:  1024,
 		MultiplexerWorkerCount: 1,
 		MemberlistConfig:       memberlist.DefaultLocalConfig(),
+		CacheReplicaCount:      3,
+		CacheRemoteTimeout:     100 * time.Millisecond,
 	}
+}
+
+func GetDefaultSingleConfig() *Config {
+	return &Config{}
 }
