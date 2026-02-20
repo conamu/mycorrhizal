@@ -39,11 +39,21 @@ func (c *cache) Set(bucket, key string, value any, ttl time.Duration) error {
 
 	if c.isLocal(bucket, key) {
 		c.logger.Debug(fmt.Sprintf("cache set local for key %s on bucket %s", key, bucket))
-		return c.setLocal(bucket, key, value, ttl)
+
+		err := c.setLocal(bucket, key, value, ttl)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	c.logger.Debug(fmt.Sprintf("cache set remote for key %s on bucket %s", key, bucket))
-	return c.setRemote(bucket, key, value, ttl)
+	err := c.setRemote(bucket, key, value, ttl)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 /*TODO:
@@ -94,6 +104,10 @@ func (c *cache) isLocal(bucket, key string) bool {
 		return true
 	}
 	return false
+}
+
+func (c *cache) getReplicaNodes(bucket, key string) []string {
+	return nil
 }
 
 // shutdown will gracefully mark the node as dead and sign off from the network

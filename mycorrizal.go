@@ -5,10 +5,10 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"sync"
 	"time"
@@ -168,18 +168,7 @@ func (mc *mycorrizal) Start() error {
 
 	if mc.debug {
 		go func() {
-
-			mux := http.NewServeMux()
-			mux.HandleFunc("/debug/pprof/", pprof.Index)
-
-			srv := &http.Server{
-				Addr:    ":6060",
-				Handler: mux,
-			}
-
-			mc.debugHttpServer = srv
-
-			mc.logger.Warn(srv.ListenAndServe().Error())
+			log.Println(http.ListenAndServe("localhost:6060", nil))
 		}()
 	}
 

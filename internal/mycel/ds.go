@@ -38,7 +38,7 @@ Other allowed interactions:
 const (
 	GET      uint8 = 0x00
 	SET      uint8 = 0x01
-	SETTTL         = 0x02
+	SETTTL   uint8 = 0x02
 	DELETE   uint8 = 0x03
 	RESPONSE uint8 = 0x04
 )
@@ -257,7 +257,7 @@ func (l *lruBucket) Delete(key string) {
 				n.prev.next = nil
 			}
 
-			// Clear the deleted node's own pointers
+			// Clear the deleted nodes own pointers
 			n.RUnlock()
 			n.Lock()
 			n.next = nil
