@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/memberlist"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Config struct {
@@ -19,6 +20,7 @@ type Config struct {
 	SharedSecret     string
 	HandshakeTimeout time.Duration
 	Logger           *slog.Logger
+	Meter            metric.Meter
 	Wg               *sync.WaitGroup
 	TlsHostName      string
 	TlsCACert        *x509.Certificate

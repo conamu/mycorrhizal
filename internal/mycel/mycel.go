@@ -9,6 +9,7 @@ import (
 
 	"github.com/conamu/go-worker"
 	"github.com/conamu/mycorrizal/internal/nodosum"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Mycel interface {
@@ -24,6 +25,7 @@ type mycel struct {
 	wg            *sync.WaitGroup
 	logger        *slog.Logger
 	ndsm          *nodosum.Nodosum
+	meter         metric.Meter
 	app           nodosum.Application
 	readyChan     chan any
 	cache         *cache
@@ -74,6 +76,7 @@ func New(cfg *Config) (Mycel, error) {
 		cancel:        cancel,
 		wg:            &sync.WaitGroup{},
 		logger:        cfg.Logger,
+		meter:         cfg.Meter,
 		ndsm:          cfg.Nodosum,
 		readyChan:     make(chan any),
 		replicas:      cfg.Replicas,
