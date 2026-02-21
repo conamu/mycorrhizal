@@ -1,6 +1,7 @@
 package mycel
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/conamu/mycorrizal/internal/nodosum"
+	"go.opentelemetry.io/otel/metric"
 )
 
 /*
@@ -45,7 +47,9 @@ const (
 
 func (m *mycel) initCache() {
 	m.cache = &cache{
+		ctx:              m.ctx,
 		logger:           m.logger,
+		meter:            m.meter,
 		nodeId:           m.ndsm.Id(),
 		app:              m.app,
 		keyVal:           &keyVal{data: make(map[string]*node)},
@@ -59,7 +63,9 @@ func (m *mycel) initCache() {
 // cache holds references to all nodes and buckets protected by mu
 type cache struct {
 	sync.WaitGroup
+	ctx              context.Context
 	logger           *slog.Logger
+	meter            metric.Meter
 	nodeId           string
 	app              nodosum.Application
 	keyVal           *keyVal

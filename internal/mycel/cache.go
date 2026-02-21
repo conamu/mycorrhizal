@@ -28,6 +28,12 @@ func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
+	co, err := c.meter.Int64Counter("cache.get")
+	if err != nil {
+		c.logger.Warn("!!!couldnt get otel meter instrument, probably OTEL is not working!!!")
+	}
+	co.Add(c.ctx, 1)
+
 	if c.isLocal(bucket, key) {
 		return c.getLocal(bucket, key)
 	}

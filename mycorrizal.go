@@ -16,6 +16,8 @@ import (
 	"github.com/conamu/mycorrizal/internal/mycel"
 	"github.com/conamu/mycorrizal/internal/nodosum"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 
 	_ "net/http/pprof"
 )
@@ -35,6 +37,7 @@ type mycorrizal struct {
 	wg              *sync.WaitGroup
 	cancel          context.CancelFunc
 	logger          *slog.Logger
+	meter           metric.Meter
 	httpClient      *http.Client
 	discoveryMode   int
 	nodeAddrs       []net.TCPAddr
@@ -110,12 +113,15 @@ func New(cfg *Config) (Mycorrizal, error) {
 		nodeMeta.IPs = append(nodeMeta.IPs, addr.String())
 	}
 
+	meter := otel.GetMeterProvider().Meter("mycorrhizal")
+
 	nodosumConfig := &nodosum.Config{
 		NodeId:           id,
 		NodeAddrs:        &nodeMeta,
 		Ctx:              ctx,
 		ListenPort:       cfg.ListenPort,
 		Logger:           cfg.Logger,
+		Meter:            meter,
 		Wg:               &sync.WaitGroup{},
 		HandshakeTimeout: cfg.HandshakeTimeout,
 		SharedSecret:     cfg.SharedSecret,
@@ -134,6 +140,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 	mycelConfig := &mycel.Config{
 		Ctx:           ctx,
 		Logger:        cfg.Logger,
+		Meter:         meter,
 		Nodosum:       ndsm,
 		Replicas:      cfg.CacheReplicaCount,
 		RemoteTimeout: cfg.HandshakeTimeout,
@@ -151,6 +158,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		wg:            &sync.WaitGroup{},
 		cancel:        cancel,
 		logger:        cfg.Logger,
+		meter:         meter,
 		httpClient:    httpClient,
 		discoveryMode: cfg.DiscoveryMode,
 		nodeAddrs:     cfg.NodeAddrs,

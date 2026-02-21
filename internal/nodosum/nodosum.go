@@ -16,6 +16,7 @@ import (
 	"github.com/1password/onepassword-sdk-go"
 	"github.com/hashicorp/memberlist"
 	"github.com/quic-go/quic-go"
+	"go.opentelemetry.io/otel/metric"
 )
 
 /*
@@ -48,6 +49,7 @@ type Nodosum struct {
 	udpConn                *net.UDPConn
 	sharedSecret           string
 	logger                 *slog.Logger
+	meter                  metric.Meter
 	applications           *applications
 	wg                     *sync.WaitGroup
 	tlsConfig              *tls.Config
@@ -115,6 +117,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		udpConn:                udpConn,
 		sharedSecret:           cfg.SharedSecret,
 		logger:                 cfg.Logger,
+		meter:                  cfg.Meter,
 		applications:           &applications{applications: make(map[string]*application)},
 		wg:                     cfg.Wg,
 		tlsCaCert:              cfg.TlsCACert,
