@@ -15,8 +15,10 @@ var (
 type Cache interface {
 	CreateBucket(name string, ttl time.Duration, maxLen int) error
 	// CreateGeoBucket creates a fully-replicated geo bucket for spatial queries.
-	// precision is the geohash prefix length used for internal node routing (recommended: 3).
-	CreateGeoBucket(name string, ttl time.Duration, maxLen int, precision int) error
+	// precisions is the set of geohash precision levels to index (e.g. []uint{5, 9}).
+	// Queries must specify one of the configured precisions.
+	// The highest precision is used as the canonical stored geohash.
+	CreateGeoBucket(name string, ttl time.Duration, maxLen int, precisions []uint) error
 	Get(bucket, key string) (any, error)
 	Set(bucket, key string, value any, ttl time.Duration) error
 	Delete(bucket, key string) error
@@ -33,13 +35,16 @@ func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
 	return nil
 }
 
-func (c *cache) CreateGeoBucket(name string, ttl time.Duration, maxLen int, precision int) error {
-	_, err := c.lruBuckets.CreateGeoBucketInternal(name, ttl, maxLen, precision)
+func (c *cache) CreateGeoBucket(name string, ttl time.Duration, maxLen int, precisions []uint) error {
+	if len(precisions) == 0 {
+		return errors.New("at least one precision level is required")
+	}
+	_, err := c.lruBuckets.CreateGeoBucketInternal(name, ttl, maxLen, precisions)
 	if err != nil {
 		return err
 	}
 	// Register the bucket in the geo index store so queries can target it.
-	c.geo.createStore(name)
+	c.geo.createStore(name, precisions)
 	return nil
 }
 

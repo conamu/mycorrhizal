@@ -8,12 +8,13 @@ import (
 
 // geoPayload is the wire format for geo replication messages sent via app.Send().
 type geoPayload struct {
-	Operation uint8
-	Bucket    string
-	UserID    string
-	Lat       float64
-	Lng       float64
-	TTL       time.Duration
+	Operation  uint8
+	Bucket     string
+	UserID     string
+	Lat        float64
+	Lng        float64
+	TTL        time.Duration
+	Precisions []uint // carried on GEO_SET so receiving nodes can init the store if needed
 }
 
 func encodeGeoPayload(p geoPayload) ([]byte, error) {
@@ -39,17 +40,27 @@ func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time
 		return err
 	}
 
+	// Gather precisions from the local store to carry in the broadcast.
+	s, err := g.getStore(bucket)
+	if err != nil {
+		return err
+	}
+	s.RLock()
+	precisions := make([]uint, len(s.precisions))
+	copy(precisions, s.precisions)
+	s.RUnlock()
+
 	// 2. Broadcast to all other nodes — fire-and-forget via DATA frames.
 	payload, err := encodeGeoPayload(geoPayload{
-		Operation: GEO_SET,
-		Bucket:    bucket,
-		UserID:    userID,
-		Lat:       lat,
-		Lng:       lng,
-		TTL:       ttl,
+		Operation:  GEO_SET,
+		Bucket:     bucket,
+		UserID:     userID,
+		Lat:        lat,
+		Lng:        lng,
+		TTL:        ttl,
+		Precisions: precisions,
 	})
 	if err != nil {
-		// Encoding failure is a local bug; log but don't block the caller.
 		g.logger.Error("geo: failed to encode replication payload", "error", err)
 		return err
 	}
@@ -97,6 +108,11 @@ func (c *cache) handleGeoReceive(data []byte) error {
 	switch p.Operation {
 	case GEO_SET:
 		c.logger.Debug("geo: received replicated SET", "bucket", p.Bucket, "user", p.UserID)
+		// Ensure the store exists on this node with the correct precision config.
+		// createStore is a no-op if the store was already created via CreateGeoBucket.
+		if len(p.Precisions) > 0 {
+			c.geo.createStore(p.Bucket, p.Precisions)
+		}
 		return c.geo.setLocationLocal(p.Bucket, p.UserID, p.Lat, p.Lng, p.TTL)
 	case DELETE:
 		c.logger.Debug("geo: received replicated DELETE", "bucket", p.Bucket, "user", p.UserID)

@@ -138,13 +138,13 @@ type replicaLocalityCache struct {
 // lruBucket is a local dll based cache with ttls
 type lruBucket struct {
 	sync.RWMutex
-	bType        bucketType // bucketTypeRegular or bucketTypeGeo
-	geoPrecision int        // geohash prefix length used for rendezvous routing (geo buckets only)
-	head         *node
-	tail         *node
-	len          int
-	maxLen       int
-	defaultTtl   time.Duration
+	bType           bucketType // bucketTypeRegular or bucketTypeGeo
+	geoRoutingPrec  uint       // lowest configured precision, used for FNV-1a rendezvous routing (geo buckets only)
+	head            *node
+	tail            *node
+	len             int
+	maxLen          int
+	defaultTtl      time.Duration
 }
 
 type node struct {
@@ -267,8 +267,9 @@ func (l *lruBuckets) CreateBucket(name string, defaultTtl time.Duration, maxLen 
 }
 
 // CreateGeoBucketInternal creates a fully-replicated geo bucket.
-// precision is the geohash prefix length used for rendezvous routing (e.g. 3).
-func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Duration, maxLen int, precision int) (*lruBucket, error) {
+// precisions is the set of geohash precision levels to index; the lowest value
+// is used as the FNV-1a rendezvous routing key truncation length.
+func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Duration, maxLen int, precisions []uint) (*lruBucket, error) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -276,11 +277,19 @@ func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Durati
 		return nil, errors.New("bucket already exists")
 	}
 
+	// Use the lowest precision as the routing precision for FNV-1a scoring.
+	routingPrec := precisions[0]
+	for _, p := range precisions {
+		if p < routingPrec {
+			routingPrec = p
+		}
+	}
+
 	l.data[name] = &lruBucket{
-		bType:        bucketTypeGeo,
-		geoPrecision: precision,
-		maxLen:       maxLen,
-		defaultTtl:   defaultTtl,
+		bType:          bucketTypeGeo,
+		geoRoutingPrec: routingPrec,
+		maxLen:         maxLen,
+		defaultTtl:     defaultTtl,
 	}
 
 	return l.data[name], nil

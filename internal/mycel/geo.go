@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -11,8 +12,9 @@ import (
 )
 
 var (
-	ERR_NO_GEO_BUCKET = errors.New("geo bucket not found")
+	ERR_NO_GEO_BUCKET  = errors.New("geo bucket not found")
 	ERR_USER_NOT_FOUND = errors.New("user location not found")
+	ERR_BAD_PRECISION  = errors.New("precision not indexed for this bucket")
 )
 
 // GeoEntry is the unit returned by spatial queries.
@@ -20,7 +22,7 @@ type GeoEntry struct {
 	UserID    string
 	Lat       float64
 	Lng       float64
-	Geohash   string
+	Geohash   string // stored at the highest configured precision
 	ExpiresAt time.Time
 }
 
@@ -35,22 +37,44 @@ type GeoCache interface {
 	DeleteLocation(bucket, userID string) error
 
 	// BoundingBox returns all user locations within the given coordinate box.
+	// precision must be one of the levels configured when the bucket was created.
 	// All results are resolved locally — zero network hops.
-	BoundingBox(bucket string, minLat, minLng, maxLat, maxLng float64) ([]GeoEntry, error)
+	BoundingBox(bucket string, minLat, minLng, maxLat, maxLng float64, precision uint) ([]GeoEntry, error)
 
 	// RadiusQuery returns all user locations within radiusKm of the given point.
+	// precision must be one of the levels configured when the bucket was created.
 	// All results are resolved locally — zero network hops.
-	RadiusQuery(bucket string, lat, lng float64, radiusKm float64) ([]GeoEntry, error)
+	RadiusQuery(bucket string, lat, lng float64, radiusKm float64, precision uint) ([]GeoEntry, error)
 }
 
 // geoStore holds the spatial index and point data for a single geo bucket.
 // It is fully replicated on every node.
 type geoStore struct {
 	sync.RWMutex
-	// index maps geohash cell (at full precision) → set of userIDs
-	index map[string]map[string]struct{}
-	// points maps userID → GeoEntry for O(1) lookups and flush iteration
+	// precisions is the sorted slice of indexed precision levels, highest last.
+	// The highest value is the canonical precision stored in GeoEntry.Geohash.
+	precisions []uint
+	// index maps precision → geohash cell → set of userIDs.
+	// A separate map tier per precision level allows O(1) lookup at any precision.
+	index map[uint]map[string]map[string]struct{}
+	// points maps userID → GeoEntry for O(1) point lookups and flush iteration.
 	points map[string]GeoEntry
+}
+
+// maxPrecision returns the highest configured precision for this store.
+// The slice is always sorted ascending so the last element is the max.
+func (s *geoStore) maxPrecision() uint {
+	return s.precisions[len(s.precisions)-1]
+}
+
+// hasPrecision reports whether p is a configured precision level for this store.
+func (s *geoStore) hasPrecision(p uint) bool {
+	for _, v := range s.precisions {
+		if v == p {
+			return true
+		}
+	}
+	return false
 }
 
 // geoCache is the concrete implementation of GeoCache, attached to cache.
@@ -74,15 +98,30 @@ func newGeoCache(ctx context.Context, logger *slog.Logger, app nodosum.Applicati
 	}
 }
 
-// createStore registers a new geoStore for a bucket. Called by CreateGeoBucket.
-func (g *geoCache) createStore(bucket string) {
+// createStore registers a new geoStore for a bucket with the given precision levels.
+// Called by CreateGeoBucket. precisions must not be empty.
+func (g *geoCache) createStore(bucket string, precisions []uint) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if _, exists := g.stores[bucket]; !exists {
-		g.stores[bucket] = &geoStore{
-			index:  make(map[string]map[string]struct{}),
-			points: make(map[string]GeoEntry),
-		}
+	if _, exists := g.stores[bucket]; exists {
+		return
+	}
+
+	// Sort precisions ascending so maxPrecision() is always the last element.
+	sorted := make([]uint, len(precisions))
+	copy(sorted, precisions)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+
+	// Initialise an index map tier for each precision level.
+	index := make(map[uint]map[string]map[string]struct{}, len(sorted))
+	for _, p := range sorted {
+		index[p] = make(map[string]map[string]struct{})
+	}
+
+	g.stores[bucket] = &geoStore{
+		precisions: sorted,
+		index:      index,
+		points:     make(map[string]GeoEntry),
 	}
 }
 
