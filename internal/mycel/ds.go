@@ -3,7 +3,6 @@ package mycel
 import (
 	"context"
 	"errors"
-	"hash/fnv"
 	"log/slog"
 	"sort"
 	"sync"
@@ -138,13 +137,12 @@ type replicaLocalityCache struct {
 // lruBucket is a local dll based cache with ttls
 type lruBucket struct {
 	sync.RWMutex
-	bType           bucketType // bucketTypeRegular or bucketTypeGeo
-	geoRoutingPrec  uint       // lowest configured precision, used for FNV-1a rendezvous routing (geo buckets only)
-	head            *node
-	tail            *node
-	len             int
-	maxLen          int
-	defaultTtl      time.Duration
+	bType      bucketType // bucketTypeRegular or bucketTypeGeo
+	head       *node
+	tail       *node
+	len        int
+	maxLen     int
+	defaultTtl time.Duration
 }
 
 type node struct {
@@ -174,29 +172,13 @@ func (c *cache) scoreRegular(key, nodeId string) uint64 {
 	return h.Sum64()
 }
 
-// scoreGeo scores a geohash prefix against a node using FNV-1a 64-bit.
-// Low avalanche property preserves the spatial structure of the geohash prefix,
-// so adjacent cells tend to score similarly and land on the same node.
-func (c *cache) scoreGeo(geohashPrefix, nodeId string) uint64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(geohashPrefix))
-	_, _ = h.Write([]byte(nodeId))
-	return h.Sum64()
-}
-
 // getReplicas calculates rendezvous scores for a cache key across all known nodes.
-// For geo buckets the key is truncated to the bucket's geoPrecision before scoring.
 // The returned slice is sorted by score descending; index 0 is the primary node.
 func (c *cache) getReplicas(key string) []replicaNode {
 	nodes := c.app.Nodes()
 	nodes = append(nodes, c.nodeId)
 	var scoredNodes []replicaNode
 
-	// Determine which scorer and key form to use based on bucket type.
-	// We look up the bucket by checking whether the key starts with a known geo bucket prefix.
-	// The bucket name is embedded in the composite key passed by isLocal (bucket+key),
-	// so we pass the full composite key and each scorer uses it as-is.
-	// For geo buckets the caller (isLocal) already passes the truncated routing key.
 	for _, nodeId := range nodes {
 		nodeScore := c.scoreRegular(key, nodeId)
 		scoredNodes = append(scoredNodes, replicaNode{
@@ -212,27 +194,6 @@ func (c *cache) getReplicas(key string) []replicaNode {
 	return scoredNodes
 }
 
-// getReplicasGeo calculates rendezvous scores using the FNV-1a geo scorer.
-// geohashPrefix should already be truncated to the bucket's routing precision.
-func (c *cache) getReplicasGeo(geohashPrefix string) []replicaNode {
-	nodes := c.app.Nodes()
-	nodes = append(nodes, c.nodeId)
-	var scoredNodes []replicaNode
-
-	for _, nodeId := range nodes {
-		nodeScore := c.scoreGeo(geohashPrefix, nodeId)
-		scoredNodes = append(scoredNodes, replicaNode{
-			id:    nodeId,
-			score: nodeScore,
-		})
-	}
-
-	sort.Slice(scoredNodes, func(i, j int) bool {
-		return scoredNodes[i].score > scoredNodes[j].score
-	})
-
-	return scoredNodes
-}
 
 // LRU DLL Methods
 
@@ -267,8 +228,7 @@ func (l *lruBuckets) CreateBucket(name string, defaultTtl time.Duration, maxLen 
 }
 
 // CreateGeoBucketInternal creates a fully-replicated geo bucket.
-// precisions is the set of geohash precision levels to index; the lowest value
-// is used as the FNV-1a rendezvous routing key truncation length.
+// Geo buckets do not use rendezvous routing — all data is broadcast to every node.
 func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Duration, maxLen int, precisions []uint) (*lruBucket, error) {
 	l.Lock()
 	defer l.Unlock()
@@ -277,19 +237,10 @@ func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Durati
 		return nil, errors.New("bucket already exists")
 	}
 
-	// Use the lowest precision as the routing precision for FNV-1a scoring.
-	routingPrec := precisions[0]
-	for _, p := range precisions {
-		if p < routingPrec {
-			routingPrec = p
-		}
-	}
-
 	l.data[name] = &lruBucket{
-		bType:          bucketTypeGeo,
-		geoRoutingPrec: routingPrec,
-		maxLen:         maxLen,
-		defaultTtl:     defaultTtl,
+		bType:      bucketTypeGeo,
+		maxLen:     maxLen,
+		defaultTtl: defaultTtl,
 	}
 
 	return l.data[name], nil
