@@ -54,6 +54,7 @@ func (c *cache) setLocal(bucket, key string, value any, ttl time.Duration) error
 
 	c.keyVal.Set(bucket+key, n)
 	b.Push(n)
+	c.recordBucketSize(c.ctx, bucket, 1)
 
 	// LRU Eviction
 	if b.len > b.maxLen {
@@ -72,6 +73,8 @@ func (c *cache) setLocal(bucket, key string, value any, ttl time.Duration) error
 		delete(c.nodeScoreHashMap.data, bucket+key)
 		c.nodeScoreHashMap.Unlock()
 		b.len--
+		c.recordLruEviction(c.ctx, bucket)
+		c.recordBucketSize(c.ctx, bucket, -1)
 	}
 
 	return nil
@@ -88,6 +91,7 @@ func (c *cache) deleteLocal(bucket, key string) error {
 	c.nodeScoreHashMap.Lock()
 	delete(c.nodeScoreHashMap.data, bucket+key)
 	c.nodeScoreHashMap.Unlock()
+	c.recordBucketSize(c.ctx, bucket, -1)
 	return nil
 }
 

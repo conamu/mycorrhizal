@@ -36,6 +36,7 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 
 	for bucket, keys := range expiredKeys {
 		for _, key := range keys {
+			c.recordTtlEviction(c.ctx, bucket)
 			err := c.Delete(bucket, key)
 			if err != nil {
 				w.Logger.Error(fmt.Sprintf("error performing ttl evicition for key %s in bucket %s", key, bucket), err)
