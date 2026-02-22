@@ -49,8 +49,11 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 }
 
 func (c *cache) applicationReceiveFunc(payload []byte) error {
-	c.logger.Warn("application receive function not set")
-	return nil
+	if len(payload) == 0 {
+		return nil
+	}
+	// All fire-and-forget DATA frames currently carry geo replication payloads.
+	return c.handleGeoReceive(payload)
 }
 
 func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) ([]byte, error) {

@@ -2,14 +2,14 @@ package mycel
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
+	"hash/fnv"
 	"log/slog"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/conamu/mycorrizal/internal/nodosum"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -38,11 +38,21 @@ Other allowed interactions:
 */
 
 const (
-	GET      uint8 = 0x00
-	SET      uint8 = 0x01
-	SETTTL   uint8 = 0x02
-	DELETE   uint8 = 0x03
+	GET     uint8 = 0x00
+	SET     uint8 = 0x01
+	SETTTL  uint8 = 0x02
+	DELETE  uint8 = 0x03
 	RESPONSE uint8 = 0x04
+	GEO_SET uint8 = 0x05
+)
+
+// bucketType distinguishes regular rendezvous-distributed buckets from
+// fully-replicated geo buckets.
+type bucketType int
+
+const (
+	bucketTypeRegular bucketType = iota
+	bucketTypeGeo
 )
 
 func (m *mycel) initCache() {
@@ -65,6 +75,8 @@ func (m *mycel) initCache() {
 		replicas:             m.replicas,
 		remoteTimeout:        m.remoteTimeout,
 	}
+
+	m.cache.geo = newGeoCache(m.ctx, m.logger, m.app, m.cache)
 }
 
 // cache holds references to all nodes and buckets protected by mu
@@ -80,6 +92,7 @@ type cache struct {
 	lruBuckets           *lruBuckets
 	nodeScoreHashMap     *remoteCacheNodeHashMap
 	replicaLocalityCache *replicaLocalityCache
+	geo                  *geoCache
 	replicas             int
 	remoteTimeout        time.Duration
 }
@@ -125,11 +138,13 @@ type replicaLocalityCache struct {
 // lruBucket is a local dll based cache with ttls
 type lruBucket struct {
 	sync.RWMutex
-	head       *node
-	tail       *node
-	len        int
-	maxLen     int
-	defaultTtl time.Duration
+	bType        bucketType // bucketTypeRegular or bucketTypeGeo
+	geoPrecision int        // geohash prefix length used for rendezvous routing (geo buckets only)
+	head         *node
+	tail         *node
+	len          int
+	maxLen       int
+	defaultTtl   time.Duration
 }
 
 type node struct {
@@ -150,23 +165,62 @@ type replicaNode struct {
 	score uint64
 }
 
-// score calculates the score of a node selection for a cache key. Data is written to N nodes with highest scores
-func (c *cache) score(key, nodeId string) uint64 {
-	h := sha256.New()
-	h.Write([]byte(key))
-	h.Write([]byte(nodeId))
-	sum := h.Sum(nil)
-	return binary.LittleEndian.Uint64(sum[:8])
+// scoreRegular scores a regular cache key against a node using xxHash64.
+// High avalanche property ensures uniform, input-independent distribution.
+func (c *cache) scoreRegular(key, nodeId string) uint64 {
+	h := xxhash.New()
+	_, _ = h.Write([]byte(key))
+	_, _ = h.Write([]byte(nodeId))
+	return h.Sum64()
 }
 
-// getReplicas calculates replicas scores for cache key. Returned slice is sorted by highest score.
+// scoreGeo scores a geohash prefix against a node using FNV-1a 64-bit.
+// Low avalanche property preserves the spatial structure of the geohash prefix,
+// so adjacent cells tend to score similarly and land on the same node.
+func (c *cache) scoreGeo(geohashPrefix, nodeId string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(geohashPrefix))
+	_, _ = h.Write([]byte(nodeId))
+	return h.Sum64()
+}
+
+// getReplicas calculates rendezvous scores for a cache key across all known nodes.
+// For geo buckets the key is truncated to the bucket's geoPrecision before scoring.
+// The returned slice is sorted by score descending; index 0 is the primary node.
 func (c *cache) getReplicas(key string) []replicaNode {
 	nodes := c.app.Nodes()
 	nodes = append(nodes, c.nodeId)
 	var scoredNodes []replicaNode
 
+	// Determine which scorer and key form to use based on bucket type.
+	// We look up the bucket by checking whether the key starts with a known geo bucket prefix.
+	// The bucket name is embedded in the composite key passed by isLocal (bucket+key),
+	// so we pass the full composite key and each scorer uses it as-is.
+	// For geo buckets the caller (isLocal) already passes the truncated routing key.
 	for _, nodeId := range nodes {
-		nodeScore := c.score(key, nodeId)
+		nodeScore := c.scoreRegular(key, nodeId)
+		scoredNodes = append(scoredNodes, replicaNode{
+			id:    nodeId,
+			score: nodeScore,
+		})
+	}
+
+	sort.Slice(scoredNodes, func(i, j int) bool {
+		return scoredNodes[i].score > scoredNodes[j].score
+	})
+
+	return scoredNodes
+}
+
+// getReplicasGeo calculates rendezvous scores using the FNV-1a geo scorer.
+// geohashPrefix should already be truncated to the bucket's routing precision.
+func (c *cache) getReplicasGeo(geohashPrefix string) []replicaNode {
+	nodes := c.app.Nodes()
+	nodes = append(nodes, c.nodeId)
+	var scoredNodes []replicaNode
+
+	for _, nodeId := range nodes {
+		nodeScore := c.scoreGeo(geohashPrefix, nodeId)
 		scoredNodes = append(scoredNodes, replicaNode{
 			id:    nodeId,
 			score: nodeScore,
@@ -194,7 +248,7 @@ func (l *lruBuckets) GetBucket(name string) (*lruBucket, error) {
 	return b, nil
 }
 
-// CreateBucket creates a bucket with name and set ttl and a configured max LRU length
+// CreateBucket creates a regular rendezvous-distributed bucket.
 func (l *lruBuckets) CreateBucket(name string, defaultTtl time.Duration, maxLen int) (*lruBucket, error) {
 	l.Lock()
 	defer l.Unlock()
@@ -204,8 +258,29 @@ func (l *lruBuckets) CreateBucket(name string, defaultTtl time.Duration, maxLen 
 	}
 
 	l.data[name] = &lruBucket{
+		bType:      bucketTypeRegular,
 		maxLen:     maxLen,
 		defaultTtl: defaultTtl,
+	}
+
+	return l.data[name], nil
+}
+
+// CreateGeoBucketInternal creates a fully-replicated geo bucket.
+// precision is the geohash prefix length used for rendezvous routing (e.g. 3).
+func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Duration, maxLen int, precision int) (*lruBucket, error) {
+	l.Lock()
+	defer l.Unlock()
+
+	if l.data[name] != nil {
+		return nil, errors.New("bucket already exists")
+	}
+
+	l.data[name] = &lruBucket{
+		bType:        bucketTypeGeo,
+		geoPrecision: precision,
+		maxLen:       maxLen,
+		defaultTtl:   defaultTtl,
 	}
 
 	return l.data[name], nil
