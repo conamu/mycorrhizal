@@ -28,38 +28,40 @@ func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
-	co, err := c.meter.Int64Counter("cache.get")
-	if err != nil {
-		c.logger.Warn("!!!couldnt get otel meter instrument, probably OTEL is not working!!!")
+	locality := localityLocal
+	if !c.isLocal(bucket, key) {
+		locality = localityRemote
 	}
-	co.Add(c.ctx, 1)
+	done := c.trackGet(bucket, locality)
 
-	if c.isLocal(bucket, key) {
-		return c.getLocal(bucket, key)
+	var val any
+	var err error
+	if locality == localityLocal {
+		val, err = c.getLocal(bucket, key)
+	} else {
+		val, err = c.getRemote(bucket, key)
 	}
-
-	return c.getRemote(bucket, key)
+	done(err == nil)
+	return val, err
 }
 
 func (c *cache) Set(bucket, key string, value any, ttl time.Duration) error {
+	locality := localityLocal
+	if !c.isLocal(bucket, key) {
+		locality = localityRemote
+	}
+	done := c.trackSet(bucket, locality)
 
-	if c.isLocal(bucket, key) {
+	var err error
+	if locality == localityLocal {
 		c.logger.Debug(fmt.Sprintf("cache set local for key %s on bucket %s", key, bucket))
-
-		err := c.setLocal(bucket, key, value, ttl)
-		if err != nil {
-			return err
-		}
-
-		return nil
+		err = c.setLocal(bucket, key, value, ttl)
+	} else {
+		c.logger.Debug(fmt.Sprintf("cache set remote for key %s on bucket %s", key, bucket))
+		err = c.setRemote(bucket, key, value, ttl)
 	}
-
-	c.logger.Debug(fmt.Sprintf("cache set remote for key %s on bucket %s", key, bucket))
-	err := c.setRemote(bucket, key, value, ttl)
-	if err != nil {
-		return err
-	}
-	return nil
+	done(err)
+	return err
 }
 
 /*TODO:
@@ -68,23 +70,41 @@ to find the node and stitch the lru instead of finding the node through iteratio
 */
 
 func (c *cache) Delete(bucket, key string) error {
-	if c.isLocal(bucket, key) {
-		c.logger.Debug(fmt.Sprintf("cache delete local for key %s on bucket %s", key, bucket))
-		return c.deleteLocal(bucket, key)
+	locality := localityLocal
+	if !c.isLocal(bucket, key) {
+		locality = localityRemote
 	}
+	done := c.trackDelete(bucket, locality)
 
-	c.logger.Debug(fmt.Sprintf("cache delete remote for key %s on bucket %s", key, bucket))
-	return c.deleteRemote(bucket, key)
+	var err error
+	if locality == localityLocal {
+		c.logger.Debug(fmt.Sprintf("cache delete local for key %s on bucket %s", key, bucket))
+		err = c.deleteLocal(bucket, key)
+	} else {
+		c.logger.Debug(fmt.Sprintf("cache delete remote for key %s on bucket %s", key, bucket))
+		err = c.deleteRemote(bucket, key)
+	}
+	done(err)
+	return err
 }
 
 func (c *cache) SetTtl(bucket, key string, ttl time.Duration) error {
-	if c.isLocal(bucket, key) {
-		c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
-		return c.setTtlLocal(bucket, key, ttl)
+	locality := localityLocal
+	if !c.isLocal(bucket, key) {
+		locality = localityRemote
 	}
+	done := c.trackSetTtl(bucket, locality)
 
-	c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
-	return c.setTtlRemote(bucket, key, ttl)
+	var err error
+	if locality == localityLocal {
+		c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
+		err = c.setTtlLocal(bucket, key, ttl)
+	} else {
+		c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
+		err = c.setTtlRemote(bucket, key, ttl)
+	}
+	done(err)
+	return err
 }
 
 func (c *cache) isLocal(bucket, key string) bool {

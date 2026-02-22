@@ -76,7 +76,7 @@ type quicApplicationStreams struct {
 func New(cfg *Config) (*Nodosum, error) {
 	onePassClient, err := onepassword.NewClient(cfg.Ctx,
 		onepassword.WithServiceAccountToken(cfg.OnePasswordToken),
-		onepassword.WithIntegrationInfo("Mycorrizal auto Cert", "v1.0.0"),
+		onepassword.WithIntegrationInfo("Mycorrhizal auto Cert", "v1.0.0"),
 	)
 	if err != nil {
 		return nil, err

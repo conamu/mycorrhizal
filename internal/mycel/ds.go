@@ -46,10 +46,16 @@ const (
 )
 
 func (m *mycel) initCache() {
+	mt, err := newMetrics(m.meter)
+	if err != nil {
+		m.logger.Warn("failed to initialize cache metrics, OTEL may not be configured", "error", err)
+	}
+
 	m.cache = &cache{
 		ctx:              m.ctx,
 		logger:           m.logger,
 		meter:            m.meter,
+		metrics:          mt,
 		nodeId:           m.ndsm.Id(),
 		app:              m.app,
 		keyVal:           &keyVal{data: make(map[string]*node)},
@@ -66,6 +72,7 @@ type cache struct {
 	ctx              context.Context
 	logger           *slog.Logger
 	meter            metric.Meter
+	metrics          *metrics
 	nodeId           string
 	app              nodosum.Application
 	keyVal           *keyVal
@@ -73,6 +80,20 @@ type cache struct {
 	nodeScoreHashMap *remoteCacheNodeHashMap
 	replicas         int
 	remoteTimeout    time.Duration
+}
+
+type metrics struct {
+	gets         metric.Int64Counter
+	sets         metric.Int64Counter
+	deletes      metric.Int64Counter
+	ttlUpdates   metric.Int64Counter
+	hits         metric.Int64Counter
+	misses       metric.Int64Counter
+	lruEvictions metric.Int64Counter
+	ttlEvictions metric.Int64Counter
+	bucketSize   metric.Int64UpDownCounter
+	duration     metric.Int64Histogram
+	errors       metric.Int64Counter
 }
 
 type keyVal struct {
