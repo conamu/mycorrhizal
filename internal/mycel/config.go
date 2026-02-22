@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	Ctx           context.Context
-	Logger        *slog.Logger
-	Meter         metric.Meter
-	Nodosum       *nodosum.Nodosum
-	Replicas      int
-	RemoteTimeout time.Duration
+	Ctx                context.Context
+	Logger             *slog.Logger
+	Meter              metric.Meter
+	Nodosum            *nodosum.Nodosum
+	Replicas           int
+	RemoteTimeout      time.Duration
+	RebalancerInterval time.Duration // How often the rebalancer runs. Defaults to 30s if zero.
 }

@@ -5,9 +5,7 @@ import (
 )
 
 func (c *cache) getRemote(bucket, key string) (any, error) {
-	c.nodeScoreHashMap.RLock()
-	target := c.nodeScoreHashMap.data[bucket+key]
-	c.nodeScoreHashMap.RUnlock()
+	target := c.getPrimaryNode(bucket, key)
 
 	payload, err := c.gobEncode(remoteCachePayload{
 		Operation: GET,
@@ -32,7 +30,12 @@ func (c *cache) getRemote(bucket, key string) (any, error) {
 }
 
 func (c *cache) setRemote(bucket, key string, value any, ttl time.Duration) error {
+	return c.setRemoteToNode(bucket, key, value, ttl, c.getPrimaryNode(bucket, key))
+}
 
+// setRemoteToNode sends a SET operation to an explicit target node.
+// Used by the replication fan-out and the rebalancer.
+func (c *cache) setRemoteToNode(bucket, key string, value any, ttl time.Duration, targetNodeId string) error {
 	payload, err := c.gobEncode(remoteCachePayload{
 		Operation: SET,
 		Key:       key,
@@ -44,7 +47,7 @@ func (c *cache) setRemote(bucket, key string, value any, ttl time.Duration) erro
 		return err
 	}
 
-	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], c.remoteTimeout)
+	res, err := c.app.Request(payload, targetNodeId, c.remoteTimeout)
 	if err != nil {
 		return err
 	}
@@ -53,10 +56,11 @@ func (c *cache) setRemote(bucket, key string, value any, ttl time.Duration) erro
 }
 
 func (c *cache) deleteRemote(bucket, key string) error {
-	c.nodeScoreHashMap.RLock()
-	target := c.nodeScoreHashMap.data[bucket+key]
-	c.nodeScoreHashMap.RUnlock()
+	return c.deleteRemoteFromNode(bucket, key, c.getPrimaryNode(bucket, key))
+}
 
+// deleteRemoteFromNode sends a DELETE operation to an explicit target node.
+func (c *cache) deleteRemoteFromNode(bucket, key, targetNodeId string) error {
 	payload, err := c.gobEncode(remoteCachePayload{
 		Operation: DELETE,
 		Key:       key,
@@ -66,17 +70,21 @@ func (c *cache) deleteRemote(bucket, key string) error {
 		return err
 	}
 
-	res, err := c.app.Request(payload, target, c.remoteTimeout)
+	res, err := c.app.Request(payload, targetNodeId, c.remoteTimeout)
 	if err != nil {
 		return err
 	}
 
 	c.logger.Debug(string(res))
-
 	return nil
 }
 
 func (c *cache) setTtlRemote(bucket, key string, ttl time.Duration) error {
+	return c.setTtlRemoteToNode(bucket, key, ttl, c.getPrimaryNode(bucket, key))
+}
+
+// setTtlRemoteToNode sends a SETTTL operation to an explicit target node.
+func (c *cache) setTtlRemoteToNode(bucket, key string, ttl time.Duration, targetNodeId string) error {
 	payload, err := c.gobEncode(remoteCachePayload{
 		Operation: SETTTL,
 		Key:       key,
@@ -87,7 +95,7 @@ func (c *cache) setTtlRemote(bucket, key string, ttl time.Duration) error {
 		return err
 	}
 
-	res, err := c.app.Request(payload, c.nodeScoreHashMap.data[bucket+key], c.remoteTimeout)
+	res, err := c.app.Request(payload, targetNodeId, c.remoteTimeout)
 	if err != nil {
 		return err
 	}

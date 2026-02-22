@@ -52,14 +52,8 @@ func (c *cache) Set(bucket, key string, value any, ttl time.Duration) error {
 	}
 	done := c.trackSet(bucket, locality)
 
-	var err error
-	if locality == localityLocal {
-		c.logger.Debug(fmt.Sprintf("cache set local for key %s on bucket %s", key, bucket))
-		err = c.setLocal(bucket, key, value, ttl)
-	} else {
-		c.logger.Debug(fmt.Sprintf("cache set remote for key %s on bucket %s", key, bucket))
-		err = c.setRemote(bucket, key, value, ttl)
-	}
+	c.logger.Debug(fmt.Sprintf("cache set for key %s on bucket %s (locality: %s)", key, bucket, locality))
+	err := c.setReplicated(bucket, key, value, ttl)
 	done(err)
 	return err
 }
@@ -76,14 +70,8 @@ func (c *cache) Delete(bucket, key string) error {
 	}
 	done := c.trackDelete(bucket, locality)
 
-	var err error
-	if locality == localityLocal {
-		c.logger.Debug(fmt.Sprintf("cache delete local for key %s on bucket %s", key, bucket))
-		err = c.deleteLocal(bucket, key)
-	} else {
-		c.logger.Debug(fmt.Sprintf("cache delete remote for key %s on bucket %s", key, bucket))
-		err = c.deleteRemote(bucket, key)
-	}
+	c.logger.Debug(fmt.Sprintf("cache delete for key %s on bucket %s", key, bucket))
+	err := c.deleteReplicated(bucket, key)
 	done(err)
 	return err
 }
@@ -95,44 +83,192 @@ func (c *cache) SetTtl(bucket, key string, ttl time.Duration) error {
 	}
 	done := c.trackSetTtl(bucket, locality)
 
-	var err error
-	if locality == localityLocal {
-		c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
-		err = c.setTtlLocal(bucket, key, ttl)
-	} else {
-		c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
-		err = c.setTtlRemote(bucket, key, ttl)
-	}
+	c.logger.Debug(fmt.Sprintf("cache set ttl for key %s on bucket %s", key, bucket))
+	err := c.setTtlReplicated(bucket, key, ttl)
 	done(err)
 	return err
 }
 
-func (c *cache) isLocal(bucket, key string) bool {
-	primaryReplicaId := ""
-
+// getPrimaryNode returns the primary replica node ID for a key, using nodeScoreHashMap as a cache.
+// Uses getReplicas() only on cache miss.
+func (c *cache) getPrimaryNode(bucket, key string) string {
+	fullKey := bucket + key
 	c.nodeScoreHashMap.RLock()
-	if id, exists := c.nodeScoreHashMap.data[bucket+key]; exists {
+	if id, exists := c.nodeScoreHashMap.data[fullKey]; exists {
 		c.nodeScoreHashMap.RUnlock()
-		primaryReplicaId = id
-	} else {
-		c.nodeScoreHashMap.RUnlock()
-		// select primary calculated replica
-		scoredNodes := c.getReplicas(bucket + key)
-		primaryReplicaId = scoredNodes[0].id
-
-		// store it for future reference
-		c.nodeScoreHashMap.Lock()
-		c.nodeScoreHashMap.data[bucket+key] = scoredNodes[0].id
-		c.nodeScoreHashMap.Unlock()
+		return id
 	}
+	c.nodeScoreHashMap.RUnlock()
 
-	if primaryReplicaId == c.nodeId {
-		return true
-	}
-	return false
+	replicas := c.getReplicas(fullKey)
+	primaryId := replicas[0].id
+
+	c.nodeScoreHashMap.Lock()
+	c.nodeScoreHashMap.data[fullKey] = primaryId
+	c.nodeScoreHashMap.Unlock()
+	return primaryId
 }
 
-func (c *cache) getReplicaNodes(bucket, key string) []string {
+// isLocal returns true if this node is among the top-N replicas for the given key.
+// Uses replicaLocalityCache for O(1) lookups on the hot path; falls back to getReplicas() on miss.
+func (c *cache) isLocal(bucket, key string) bool {
+	fullKey := bucket + key
+
+	c.replicaLocalityCache.RLock()
+	if isLocal, exists := c.replicaLocalityCache.data[fullKey]; exists {
+		c.replicaLocalityCache.RUnlock()
+		return isLocal
+	}
+	c.replicaLocalityCache.RUnlock()
+
+	replicas := c.getReplicas(fullKey)
+	limit := c.replicas
+	if len(replicas) < limit {
+		limit = len(replicas)
+	}
+	selfIsReplica := false
+	for i := 0; i < limit; i++ {
+		if replicas[i].id == c.nodeId {
+			selfIsReplica = true
+			break
+		}
+	}
+
+	c.replicaLocalityCache.Lock()
+	c.replicaLocalityCache.data[fullKey] = selfIsReplica
+	c.replicaLocalityCache.Unlock()
+	return selfIsReplica
+}
+
+// invalidateCaches clears both the primary node cache and the replica locality cache.
+// Must be called when cluster topology changes so stale routing decisions are discarded.
+func (c *cache) invalidateCaches() {
+	c.nodeScoreHashMap.Lock()
+	c.nodeScoreHashMap.data = make(map[string]string)
+	c.nodeScoreHashMap.Unlock()
+
+	c.replicaLocalityCache.Lock()
+	c.replicaLocalityCache.data = make(map[string]bool)
+	c.replicaLocalityCache.Unlock()
+}
+
+// getReplicaNodes returns the top-N replica nodes for a key (N = c.replicas).
+func (c *cache) getReplicaNodes(bucket, key string) []replicaNode {
+	replicas := c.getReplicas(bucket + key)
+	limit := c.replicas
+	if len(replicas) < limit {
+		limit = len(replicas)
+	}
+	return replicas[:limit]
+}
+
+// setReplicated writes a key to all N replica nodes in parallel.
+// Requires a quorum (majority) of successful writes before returning nil.
+func (c *cache) setReplicated(bucket, key string, value any, ttl time.Duration) error {
+	replicaSet := c.getReplicaNodes(bucket, key)
+	results := make(chan error, len(replicaSet))
+
+	for _, rep := range replicaSet {
+		r := rep
+		go func() {
+			if r.id == c.nodeId {
+				results <- c.setLocal(bucket, key, value, ttl)
+			} else {
+				results <- c.setRemoteToNode(bucket, key, value, ttl, r.id)
+			}
+		}()
+	}
+
+	successCount := 0
+	var lastErr error
+	for range replicaSet {
+		if err := <-results; err == nil {
+			successCount++
+		} else {
+			c.logger.Warn(fmt.Sprintf("replica write failed for key %s/%s: %v", bucket, key, err))
+			lastErr = err
+		}
+	}
+
+	quorum := (len(replicaSet) / 2) + 1
+	if successCount < quorum {
+		return fmt.Errorf("write failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
+	}
+	return nil
+}
+
+// deleteReplicated deletes a key from all N replica nodes in parallel.
+// ERR_NOT_FOUND on a replica counts as success (idempotent delete).
+func (c *cache) deleteReplicated(bucket, key string) error {
+	replicaSet := c.getReplicaNodes(bucket, key)
+	results := make(chan error, len(replicaSet))
+
+	for _, rep := range replicaSet {
+		r := rep
+		go func() {
+			var err error
+			if r.id == c.nodeId {
+				err = c.deleteLocal(bucket, key)
+			} else {
+				err = c.deleteRemoteFromNode(bucket, key, r.id)
+			}
+			// Not-found is success for idempotent delete
+			if errors.Is(err, ERR_NOT_FOUND) {
+				err = nil
+			}
+			results <- err
+		}()
+	}
+
+	successCount := 0
+	var lastErr error
+	for range replicaSet {
+		if err := <-results; err == nil {
+			successCount++
+		} else {
+			c.logger.Warn(fmt.Sprintf("replica delete failed for key %s/%s: %v", bucket, key, err))
+			lastErr = err
+		}
+	}
+
+	quorum := (len(replicaSet) / 2) + 1
+	if successCount < quorum {
+		return fmt.Errorf("delete failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
+	}
+	return nil
+}
+
+// setTtlReplicated updates the TTL for a key on all N replica nodes in parallel.
+func (c *cache) setTtlReplicated(bucket, key string, ttl time.Duration) error {
+	replicaSet := c.getReplicaNodes(bucket, key)
+	results := make(chan error, len(replicaSet))
+
+	for _, rep := range replicaSet {
+		r := rep
+		go func() {
+			if r.id == c.nodeId {
+				results <- c.setTtlLocal(bucket, key, ttl)
+			} else {
+				results <- c.setTtlRemoteToNode(bucket, key, ttl, r.id)
+			}
+		}()
+	}
+
+	successCount := 0
+	var lastErr error
+	for range replicaSet {
+		if err := <-results; err == nil {
+			successCount++
+		} else {
+			c.logger.Warn(fmt.Sprintf("replica setttl failed for key %s/%s: %v", bucket, key, err))
+			lastErr = err
+		}
+	}
+
+	quorum := (len(replicaSet) / 2) + 1
+	if successCount < quorum {
+		return fmt.Errorf("setttl failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
+	}
 	return nil
 }
 

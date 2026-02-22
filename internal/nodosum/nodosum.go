@@ -56,6 +56,13 @@ type Nodosum struct {
 	tlsCaCert              *x509.Certificate
 	tlsCaKey               *rsa.PrivateKey
 	readyChan              chan any
+	onTopologyChange       func(nodeId string, joined bool)
+}
+
+// SetTopologyChangeHook registers a callback that is invoked (in a new goroutine) whenever
+// a node successfully joins or leaves the cluster. Replaces any previously registered hook.
+func (n *Nodosum) SetTopologyChangeHook(fn func(nodeId string, joined bool)) {
+	n.onTopologyChange = fn
 }
 
 type quicConns struct {

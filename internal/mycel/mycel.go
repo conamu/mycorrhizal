@@ -20,17 +20,19 @@ type Mycel interface {
 }
 
 type mycel struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            *sync.WaitGroup
-	logger        *slog.Logger
-	ndsm          *nodosum.Nodosum
-	meter         metric.Meter
-	app           nodosum.Application
-	readyChan     chan any
-	cache         *cache
-	replicas      int
-	remoteTimeout time.Duration
+	ctx                context.Context
+	cancel             context.CancelFunc
+	wg                 *sync.WaitGroup
+	logger             *slog.Logger
+	ndsm               *nodosum.Nodosum
+	meter              metric.Meter
+	app                nodosum.Application
+	readyChan          chan any
+	cache              *cache
+	replicas           int
+	remoteTimeout      time.Duration
+	rebalancer         *rebalancer
+	rebalancerInterval time.Duration
 }
 
 /*
@@ -72,15 +74,16 @@ func New(cfg *Config) (Mycel, error) {
 	ctx, cancel := context.WithCancel(cfg.Ctx)
 
 	m := &mycel{
-		ctx:           ctx,
-		cancel:        cancel,
-		wg:            &sync.WaitGroup{},
-		logger:        cfg.Logger,
-		meter:         cfg.Meter,
-		ndsm:          cfg.Nodosum,
-		readyChan:     make(chan any),
-		replicas:      cfg.Replicas,
-		remoteTimeout: cfg.RemoteTimeout,
+		ctx:                ctx,
+		cancel:             cancel,
+		wg:                 &sync.WaitGroup{},
+		logger:             cfg.Logger,
+		meter:              cfg.Meter,
+		ndsm:               cfg.Nodosum,
+		readyChan:          make(chan any),
+		replicas:           cfg.Replicas,
+		remoteTimeout:      cfg.RemoteTimeout,
+		rebalancerInterval: cfg.RebalancerInterval,
 	}
 
 	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
@@ -88,6 +91,15 @@ func New(cfg *Config) (Mycel, error) {
 
 	m.app.SetReceiveFunc(m.cache.applicationReceiveFunc)
 	m.app.SetRequestHandler(m.cache.applicationRequestHandlerFunc)
+
+	m.rebalancer = newRebalancer(m.cache, m.wg, m.logger, m.rebalancerInterval)
+
+	// Register topology change hook: invalidate routing caches and trigger rebalancer
+	// whenever a node joins or leaves the cluster.
+	m.ndsm.SetTopologyChangeHook(func(nodeId string, joined bool) {
+		m.cache.invalidateCaches()
+		m.rebalancer.triggerImmediate()
+	})
 
 	return m, nil
 }
@@ -102,6 +114,7 @@ func (m *mycel) Start() error {
 	m.logger.Debug("starting mycel")
 
 	go worker.NewWorker(m.ctx, "tt-l-evictor", m.wg, m.cache.ttlEvictionWorkerTask, m.logger, 10*time.Second).Start()
+	m.rebalancer.start()
 	close(m.readyChan)
 	return nil
 }
