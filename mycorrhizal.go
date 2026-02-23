@@ -1,4 +1,4 @@
-package mycorrizal
+package mycorrhizal
 
 import (
 	"context"
