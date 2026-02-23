@@ -52,34 +52,36 @@ func (m *mycel) initCache() {
 	}
 
 	m.cache = &cache{
-		ctx:              m.ctx,
-		logger:           m.logger,
-		meter:            m.meter,
-		metrics:          mt,
-		nodeId:           m.ndsm.Id(),
-		app:              m.app,
-		keyVal:           &keyVal{data: make(map[string]*node)},
-		lruBuckets:       &lruBuckets{data: make(map[string]*lruBucket)},
-		nodeScoreHashMap: &remoteCacheNodeHashMap{data: make(map[string]string)},
-		replicas:         m.replicas,
-		remoteTimeout:    m.remoteTimeout,
+		ctx:                  m.ctx,
+		logger:               m.logger,
+		meter:                m.meter,
+		metrics:              mt,
+		nodeId:               m.ndsm.Id(),
+		app:                  m.app,
+		keyVal:               &keyVal{data: make(map[string]*node)},
+		lruBuckets:           &lruBuckets{data: make(map[string]*lruBucket)},
+		nodeScoreHashMap:     &remoteCacheNodeHashMap{data: make(map[string]string)},
+		replicaLocalityCache: &replicaLocalityCache{data: make(map[string]bool)},
+		replicas:             m.replicas,
+		remoteTimeout:        m.remoteTimeout,
 	}
 }
 
 // cache holds references to all nodes and buckets protected by mu
 type cache struct {
 	sync.WaitGroup
-	ctx              context.Context
-	logger           *slog.Logger
-	meter            metric.Meter
-	metrics          *metrics
-	nodeId           string
-	app              nodosum.Application
-	keyVal           *keyVal
-	lruBuckets       *lruBuckets
-	nodeScoreHashMap *remoteCacheNodeHashMap
-	replicas         int
-	remoteTimeout    time.Duration
+	ctx                  context.Context
+	logger               *slog.Logger
+	meter                metric.Meter
+	metrics              *metrics
+	nodeId               string
+	app                  nodosum.Application
+	keyVal               *keyVal
+	lruBuckets           *lruBuckets
+	nodeScoreHashMap     *remoteCacheNodeHashMap
+	replicaLocalityCache *replicaLocalityCache
+	replicas             int
+	remoteTimeout        time.Duration
 }
 
 type metrics struct {
@@ -111,6 +113,13 @@ type lruBuckets struct {
 type remoteCacheNodeHashMap struct {
 	sync.RWMutex
 	data map[string]string
+}
+
+// replicaLocalityCache caches whether this node is among the top-N replicas for a key.
+// Invalidated on topology changes. Avoids repeated getReplicas() calls on the hot path.
+type replicaLocalityCache struct {
+	sync.RWMutex
+	data map[string]bool
 }
 
 // lruBucket is a local dll based cache with ttls
