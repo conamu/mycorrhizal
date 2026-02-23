@@ -16,12 +16,19 @@ func (g *geoCache) setLocationLocal(bucket, userID string, lat, lng float64, ttl
 		return err
 	}
 
-	// Resolve the absolute expiry now so it can be stored in GeoEntry and
-	// broadcast to peers as an absolute deadline rather than a relative duration.
-	// A zero ttl means "use bucket default" and ExpiresAt stays zero.
+	// Resolve the effective TTL: if the caller passed 0, fall back to the
+	// bucket's defaultTtl so that GeoEntry.ExpiresAt is always populated when
+	// a default is configured.  This ensures peers receive a real absolute
+	// deadline in the replication payload rather than a zero value.
+	effectiveTTL := ttl
+	if effectiveTTL == 0 {
+		if b, err := g.cache.lruBuckets.GetBucket(bucket); err == nil {
+			effectiveTTL = b.defaultTtl
+		}
+	}
 	var expiresAt time.Time
-	if ttl != 0 {
-		expiresAt = time.Now().Add(ttl)
+	if effectiveTTL > 0 {
+		expiresAt = time.Now().Add(effectiveTTL)
 	}
 
 	// Encode at the highest precision — this is the canonical geohash stored
