@@ -16,16 +16,25 @@ func (g *geoCache) setLocationLocal(bucket, userID string, lat, lng float64, ttl
 		return err
 	}
 
+	// Resolve the absolute expiry now so it can be stored in GeoEntry and
+	// broadcast to peers as an absolute deadline rather than a relative duration.
+	// A zero ttl means "use bucket default" and ExpiresAt stays zero.
+	var expiresAt time.Time
+	if ttl != 0 {
+		expiresAt = time.Now().Add(ttl)
+	}
+
 	// Encode at the highest precision — this is the canonical geohash stored
 	// in GeoEntry and used for exact coordinate lookups.
 	maxPrec := s.maxPrecision()
 	canonicalCell := geohash.EncodeWithPrecision(lat, lng, maxPrec)
 
 	entry := GeoEntry{
-		UserID:  userID,
-		Lat:     lat,
-		Lng:     lng,
-		Geohash: canonicalCell,
+		UserID:    userID,
+		Lat:       lat,
+		Lng:       lng,
+		Geohash:   canonicalCell,
+		ExpiresAt: expiresAt,
 	}
 
 	s.Lock()
