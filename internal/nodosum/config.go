@@ -22,9 +22,8 @@ type Config struct {
 	Logger            *slog.Logger
 	Meter             metric.Meter
 	Wg                *sync.WaitGroup
-	TlsHostName       string
-	TlsCACert         *x509.Certificate
-	TlsCAKey          *rsa.PrivateKey
+	CACert            *x509.Certificate
+	CAKey             *rsa.PrivateKey
 	MemberlistConfig  *memberlist.Config
 	QuicListenPort    int
 	QuicAdvertisePort int

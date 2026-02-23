@@ -123,8 +123,8 @@ func New(cfg *Config) (*Nodosum, error) {
 		meter:                  cfg.Meter,
 		applications:           &applications{applications: make(map[string]*application)},
 		wg:                     cfg.Wg,
-		tlsCaCert:              cfg.TlsCACert,
-		tlsCaKey:               cfg.TlsCAKey,
+		tlsCaCert:              cfg.CACert,
+		tlsCaKey:               cfg.CAKey,
 		readyChan:              make(chan any),
 	}
 

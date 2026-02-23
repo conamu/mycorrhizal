@@ -70,13 +70,7 @@ type Config struct {
 
 		Default: 2 seconds
 	*/
-	HandshakeTimeout   time.Duration
-	ClusterTLSEnabled  bool
-	ClusterTLSHostName string
-	ClusterTLSCACert   *x509.Certificate
-	ClusterTLSCAKey    *rsa.PrivateKey
-	ClusterTLSCert     *tls.Certificate
-	OnePassToken       string
+	HandshakeTimeout time.Duration
 	// CaCert will be used with higher priority instead of One Password if CaCert and CaKey are filled.
 	CaCert                 *x509.Certificate
 	CaKey                  *rsa.PrivateKey
