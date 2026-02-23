@@ -39,7 +39,7 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 			c.recordTtlEviction(c.ctx, bucket)
 			err := c.Delete(bucket, key)
 			if err != nil {
-				w.Logger.Error(fmt.Sprintf("error performing ttl evicition for key %s in bucket %s", key, bucket), err)
+				w.Logger.Error("ttl eviction failed", "key", key, "bucket", bucket, "error", err)
 			}
 		}
 		w.Logger.Debug(fmt.Sprintf("ttl eviction task for bucket %s done, evicted %d keys", bucket, len(keys)))
@@ -49,8 +49,11 @@ func (c *cache) ttlEvictionWorkerTask(w *worker.Worker, msg any) {
 }
 
 func (c *cache) applicationReceiveFunc(payload []byte) error {
-	c.logger.Warn("application receive function not set")
-	return nil
+	if len(payload) == 0 {
+		return nil
+	}
+	// All fire-and-forget DATA frames currently carry geo replication payloads.
+	return c.handleGeoReceive(payload)
 }
 
 func (c *cache) applicationRequestHandlerFunc(payload []byte, senderId string) ([]byte, error) {

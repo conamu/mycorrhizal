@@ -17,6 +17,8 @@ type Mycel interface {
 	Ready(timeout time.Duration) error
 	Shutdown()
 	Cache() Cache
+	// Geo returns the GeoCache interface for spatial location operations.
+	Geo() GeoCache
 }
 
 type mycel struct {
@@ -33,6 +35,8 @@ type mycel struct {
 	remoteTimeout      time.Duration
 	rebalancer         *rebalancer
 	rebalancerInterval time.Duration
+	geoFlushInterval   time.Duration
+	geoFlushFunc       GeoFlushFunc
 }
 
 /*
@@ -77,6 +81,11 @@ func New(cfg *Config) (Mycel, error) {
 
 	ctx, cancel := context.WithCancel(cfg.Ctx)
 
+	flushInterval := cfg.GeoFlushInterval
+	if flushInterval == 0 {
+		flushInterval = 30 * time.Second
+	}
+
 	m := &mycel{
 		ctx:                ctx,
 		cancel:             cancel,
@@ -88,6 +97,8 @@ func New(cfg *Config) (Mycel, error) {
 		replicas:           cfg.Replicas,
 		remoteTimeout:      cfg.RemoteTimeout,
 		rebalancerInterval: cfg.RebalancerInterval,
+		geoFlushInterval:   flushInterval,
+		geoFlushFunc:       cfg.GeoFlushFunc,
 	}
 
 	m.app = m.ndsm.RegisterApplication("SYSTEM-MYCEL")
@@ -119,6 +130,12 @@ func (m *mycel) Start() error {
 
 	go worker.NewWorker(m.ctx, "tt-l-evictor", m.wg, m.cache.ttlEvictionWorkerTask, m.logger, 10*time.Second).Start()
 	m.rebalancer.start()
+
+	if m.geoFlushFunc != nil {
+		m.cache.geo.flushFunc = m.geoFlushFunc
+		go worker.NewWorker(m.ctx, "geo-flusher", m.wg, m.cache.geo.flushWorkerTask, m.logger, m.geoFlushInterval).Start()
+	}
+
 	close(m.readyChan)
 	return nil
 }
@@ -147,4 +164,8 @@ func (m *mycel) Shutdown() {
 
 func (m *mycel) Cache() Cache {
 	return m.cache
+}
+
+func (m *mycel) Geo() GeoCache {
+	return m.cache.geo
 }
