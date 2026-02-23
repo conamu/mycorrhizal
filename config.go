@@ -84,7 +84,8 @@ type Config struct {
 	CacheReplicaCount      int
 	CacheRemoteTimeout     time.Duration
 	MemberlistConfig       *memberlist.Config
-	QuicPort               int
+	QuicListenPort         int
+	QuicAdvertisePort      int
 	Debug                  bool
 }
 
@@ -97,7 +98,6 @@ func GetDefaultClusterConfig() *Config {
 		})),
 		DiscoveryMode:          DC_MODE_STATIC,
 		SingleMode:             false,
-		ListenPort:             6969,
 		NodeAddrs:              []net.TCPAddr{},
 		HandshakeTimeout:       2 * time.Second,
 		MultiplexerBufferSize:  1024,
