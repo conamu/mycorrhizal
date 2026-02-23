@@ -101,6 +101,9 @@ func (c *cache) getPrimaryNode(bucket, key string) string {
 	c.nodeScoreHashMap.RUnlock()
 
 	replicas := c.getReplicas(fullKey)
+	if len(replicas) == 0 {
+		return ""
+	}
 	primaryId := replicas[0].id
 
 	c.nodeScoreHashMap.Lock()
@@ -166,6 +169,9 @@ func (c *cache) getReplicaNodes(bucket, key string) []replicaNode {
 // Requires a quorum (majority) of successful writes before returning nil.
 func (c *cache) setReplicated(bucket, key string, value any, ttl time.Duration) error {
 	replicaSet := c.getReplicaNodes(bucket, key)
+	if len(replicaSet) == 0 {
+		return fmt.Errorf("no replicas found for %s/%s", bucket, key)
+	}
 	results := make(chan error, len(replicaSet))
 
 	for _, rep := range replicaSet {
@@ -201,6 +207,9 @@ func (c *cache) setReplicated(bucket, key string, value any, ttl time.Duration) 
 // ERR_NOT_FOUND on a replica counts as success (idempotent delete).
 func (c *cache) deleteReplicated(bucket, key string) error {
 	replicaSet := c.getReplicaNodes(bucket, key)
+	if len(replicaSet) == 0 {
+		return fmt.Errorf("no replicas found for %s/%s", bucket, key)
+	}
 	results := make(chan error, len(replicaSet))
 
 	for _, rep := range replicaSet {
@@ -241,6 +250,9 @@ func (c *cache) deleteReplicated(bucket, key string) error {
 // setTtlReplicated updates the TTL for a key on all N replica nodes in parallel.
 func (c *cache) setTtlReplicated(bucket, key string, ttl time.Duration) error {
 	replicaSet := c.getReplicaNodes(bucket, key)
+	if len(replicaSet) == 0 {
+		return fmt.Errorf("no replicas found for %s/%s", bucket, key)
+	}
 	results := make(chan error, len(replicaSet))
 
 	for _, rep := range replicaSet {
