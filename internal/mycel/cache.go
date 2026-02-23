@@ -44,7 +44,9 @@ func (c *cache) CreateGeoBucket(name string, ttl time.Duration, maxLen int, prec
 		return err
 	}
 	// Register the bucket in the geo index store so queries can target it.
-	c.geo.createStore(name, precisions)
+	if err := c.geo.createStore(name, precisions); err != nil {
+		return err
+	}
 	return nil
 }
 

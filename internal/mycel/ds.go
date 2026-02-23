@@ -138,6 +138,7 @@ type replicaLocalityCache struct {
 type lruBucket struct {
 	sync.RWMutex
 	bType      bucketType // bucketTypeRegular or bucketTypeGeo
+	precisions []uint     // non-nil for bucketTypeGeo; the indexed geohash precision levels
 	head       *node
 	tail       *node
 	len        int
@@ -239,6 +240,7 @@ func (l *lruBuckets) CreateGeoBucketInternal(name string, defaultTtl time.Durati
 
 	l.data[name] = &lruBucket{
 		bType:      bucketTypeGeo,
+		precisions: precisions,
 		maxLen:     maxLen,
 		defaultTtl: defaultTtl,
 	}

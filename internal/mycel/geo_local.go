@@ -59,7 +59,12 @@ func (g *geoCache) setLocationLocal(bucket, userID string, lat, lng float64, ttl
 	s.Unlock()
 
 	// Write into the LRU/keyVal store so TTL eviction triggers deleteLocationLocal.
-	return g.cache.setLocal(bucket, userID, entry, ttl)
+	if err := g.cache.setLocal(bucket, userID, entry, ttl); err != nil {
+		// Roll back the geo index so it doesn't hold an entry that will never be evicted.
+		g.deleteLocationLocal(bucket, userID) //nolint:errcheck
+		return err
+	}
+	return nil
 }
 
 // deleteLocationLocal removes a user's location from every precision tier in the
@@ -157,45 +162,60 @@ func (g *geoCache) RadiusQuery(bucket string, lat, lng float64, radiusKm float64
 }
 
 // coveringCells returns the set of geohash cells at the given precision that
-// cover the bounding box, flood-filling outward from the centre cell.
+// intersect the bounding box, flood-filling outward from the centre cell.
+// Only cells that actually overlap the query box are included in the result.
 func coveringCells(minLat, minLng, maxLat, maxLng float64, precision uint) map[string]struct{} {
 	centreLat := (minLat + maxLat) / 2
 	centreLng := (minLng + maxLng) / 2
 	seed := geohash.EncodeWithPrecision(centreLat, centreLng, precision)
 
-	visited := make(map[string]struct{})
+	// enqueued tracks every cell we have ever added to the queue so we never
+	// enqueue the same cell twice, even before it has been visited.
+	enqueued := make(map[string]struct{})
+	result := make(map[string]struct{})
 	queue := []string{seed}
+	enqueued[seed] = struct{}{}
 
 	for len(queue) > 0 {
 		cell := queue[0]
 		queue = queue[1:]
 
-		if _, seen := visited[cell]; seen {
-			continue
-		}
-		visited[cell] = struct{}{}
-
 		cb := geohash.BoundingBox(cell)
 		if cb.MaxLat < minLat || cb.MinLat > maxLat ||
 			cb.MaxLng < minLng || cb.MinLng > maxLng {
+			// Cell does not intersect the box — don't add it to results,
+			// but we still stop expansion here so we don't walk past the edge.
 			continue
 		}
 
+		// Cell intersects: record it and expand to neighbours.
+		result[cell] = struct{}{}
 		for _, n := range geohash.Neighbors(cell) {
-			if _, seen := visited[n]; !seen {
+			if _, seen := enqueued[n]; !seen {
+				enqueued[n] = struct{}{}
 				queue = append(queue, n)
 			}
 		}
 	}
 
-	return visited
+	return result
 }
 
 // boundingBoxFromRadius derives a lat/lng bounding box for a circle.
+// Near the poles (|lat| > ~89.9°) cosLat approaches zero; the longitude delta
+// is clamped so it never becomes infinite, and the box simply spans all longitudes.
 func boundingBoxFromRadius(lat, lng, radiusKm float64) (minLat, minLng, maxLat, maxLng float64) {
 	const earthRadiusKm = 6371.0
 	deltaLat := radiusKm / earthRadiusKm * (180.0 / math.Pi)
-	deltaLng := radiusKm / (earthRadiusKm * math.Cos(lat*math.Pi/180.0)) * (180.0 / math.Pi)
+	cosLat := math.Cos(lat * math.Pi / 180.0)
+	if cosLat < 1e-10 {
+		// At or very near a pole — longitude wraps fully around.
+		cosLat = 1e-10
+	}
+	deltaLng := radiusKm / (earthRadiusKm * cosLat) * (180.0 / math.Pi)
+	if deltaLng > 180.0 {
+		deltaLng = 180.0
+	}
 	minLat = lat - deltaLat
 	maxLat = lat + deltaLat
 	minLng = lng - deltaLng

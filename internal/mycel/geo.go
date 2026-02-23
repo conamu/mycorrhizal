@@ -99,12 +99,16 @@ func newGeoCache(ctx context.Context, logger *slog.Logger, app nodosum.Applicati
 }
 
 // createStore registers a new geoStore for a bucket with the given precision levels.
-// Called by CreateGeoBucket. precisions must not be empty.
-func (g *geoCache) createStore(bucket string, precisions []uint) {
+// Called by CreateGeoBucket and on receipt of the first replicated GEO_SET for a bucket.
+// Returns ERR_BAD_PRECISION if precisions is empty. Is a no-op if the store already exists.
+func (g *geoCache) createStore(bucket string, precisions []uint) error {
+	if len(precisions) == 0 {
+		return ERR_BAD_PRECISION
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if _, exists := g.stores[bucket]; exists {
-		return
+		return nil
 	}
 
 	// Sort precisions ascending so maxPrecision() is always the last element.
@@ -123,6 +127,7 @@ func (g *geoCache) createStore(bucket string, precisions []uint) {
 		index:      index,
 		points:     make(map[string]GeoEntry),
 	}
+	return nil
 }
 
 // getStore returns the geoStore for a bucket, or an error if not found.
