@@ -1,4 +1,4 @@
-module github.com/conamu/mycorrizal
+module github.com/conamu/mycorrhizal
 
 go 1.26.0
 

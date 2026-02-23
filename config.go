@@ -46,7 +46,7 @@ type Config struct {
 	DiscoveryHost *url.URL
 	/*
 		NodeAddrs specifies a static list of servers to connect to
-		Mycorrizal will generally exclude connecting to its own network Address,
+		Mycorrhizal will generally exclude connecting to its own network Address,
 		so it's safe to include a complete list of all node addresses
 	*/
 	NodeAddrs []net.TCPAddr

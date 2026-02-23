@@ -22,7 +22,7 @@ import (
 	_ "net/http/pprof"
 )
 
-type Mycorrizal interface {
+type Mycorrhizal interface {
 	Start() error
 	Ready(timeout time.Duration) error
 	Shutdown() error
@@ -31,7 +31,7 @@ type Mycorrizal interface {
 	Cache() mycel.Cache
 }
 
-type mycorrizal struct {
+type mycorrhizal struct {
 	nodeId          string
 	ctx             context.Context
 	wg              *sync.WaitGroup
@@ -49,7 +49,7 @@ type mycorrizal struct {
 	readyChan       chan any
 }
 
-func New(cfg *Config) (Mycorrizal, error) {
+func New(cfg *Config) (Mycorrhizal, error) {
 	ctx := cfg.Ctx
 
 	id := os.Getenv("MYCORRHIZAL_ID")
@@ -161,7 +161,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		return nil, err
 	}
 
-	return &mycorrizal{
+	return &mycorrhizal{
 		nodeId:        id,
 		ctx:           ctx,
 		wg:            &sync.WaitGroup{},
@@ -179,8 +179,8 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}, nil
 }
 
-func (mc *mycorrizal) Start() error {
-	mc.logger.Info("mycorrizal starting")
+func (mc *mycorrhizal) Start() error {
+	mc.logger.Info("mycorrhizal starting")
 	wg := &sync.WaitGroup{}
 
 	if mc.debug {
@@ -213,13 +213,13 @@ func (mc *mycorrizal) Start() error {
 	})
 	mc.wg.Add(1)
 	wg.Wait()
-	mc.logger.Info("mycorrizal startup complete")
-	mc.logger.Debug(fmt.Sprintf("mycorrizal node id %s", mc.nodeId))
+	mc.logger.Info("mycorrhizal startup complete")
+	mc.logger.Debug(fmt.Sprintf("mycorrhizal node id %s", mc.nodeId))
 	close(mc.readyChan)
 	return nil
 }
 
-func (mc *mycorrizal) Ready(timeout time.Duration) error {
+func (mc *mycorrhizal) Ready(timeout time.Duration) error {
 	if timeout == 0 {
 		timeout = time.Second * 30
 	}
@@ -229,15 +229,15 @@ func (mc *mycorrizal) Ready(timeout time.Duration) error {
 		case <-mc.readyChan:
 			return nil
 		case <-time.After(timeout):
-			return errors.New("timeout before mycorrizal could reach ready state")
+			return errors.New("timeout before mycorrhizal could reach ready state")
 		case <-mc.ctx.Done():
 			return errors.New("context canceled")
 		}
 	}
 }
 
-func (mc *mycorrizal) Shutdown() error {
-	mc.logger.Info("mycorrizal shutting down")
+func (mc *mycorrhizal) Shutdown() error {
+	mc.logger.Info("mycorrhizal shutting down")
 
 	mc.wg.Go(func() {
 		mc.nodosum.Shutdown()
@@ -260,14 +260,14 @@ func (mc *mycorrizal) Shutdown() error {
 	return nil
 }
 
-func (mc *mycorrizal) RegisterApplication(uniqueIdentifier string) nodosum.Application {
+func (mc *mycorrhizal) RegisterApplication(uniqueIdentifier string) nodosum.Application {
 	return mc.nodosum.RegisterApplication(uniqueIdentifier)
 }
 
-func (mc *mycorrizal) GetApplication(uniqueIdentifier string) nodosum.Application {
+func (mc *mycorrhizal) GetApplication(uniqueIdentifier string) nodosum.Application {
 	return mc.nodosum.GetApplication(uniqueIdentifier)
 }
 
-func (mc *mycorrizal) Cache() mycel.Cache {
+func (mc *mycorrhizal) Cache() mycel.Cache {
 	return mc.mycel.Cache()
 }
