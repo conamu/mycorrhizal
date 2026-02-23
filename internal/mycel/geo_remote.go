@@ -61,12 +61,20 @@ func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time
 	s.RUnlock()
 
 	// 2. Broadcast to all other nodes — fire-and-forget via DATA frames.
+	// TTL is set to the remaining duration for backward compatibility with older
+	// nodes that predate the ExpiresAt field and only honour the TTL duration.
+	// New receivers prefer ExpiresAt; old receivers fall back to TTL.
+	legacyTTL := time.Duration(0)
+	if !expiresAt.IsZero() {
+		legacyTTL = time.Until(expiresAt)
+	}
 	payload, err := encodeGeoPayload(geoPayload{
 		Operation:  GEO_SET,
 		Bucket:     bucket,
 		UserID:     userID,
 		Lat:        lat,
 		Lng:        lng,
+		TTL:        legacyTTL,
 		ExpiresAt:  expiresAt,
 		Precisions: precisions,
 	})

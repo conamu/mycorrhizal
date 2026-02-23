@@ -75,7 +75,10 @@ func (g *geoCache) setLocationLocal(bucket, userID string, lat, lng float64, ttl
 	s.Unlock()
 
 	// Write into the LRU/keyVal store so TTL eviction triggers deleteLocationLocal.
-	if err := g.cache.setLocal(bucket, userID, entry, ttl); err != nil {
+	// Use effectiveTTL (which includes the bucket default when ttl==0) so the LRU
+	// node always gets an expiresAt — without this the eviction worker never fires
+	// and stale geo index entries leak indefinitely.
+	if err := g.cache.setLocal(bucket, userID, entry, effectiveTTL); err != nil {
 		// Roll back the geo index so it doesn't hold an entry that will never be evicted.
 		g.deleteLocationLocal(bucket, userID) //nolint:errcheck
 		return err
