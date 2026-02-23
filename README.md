@@ -59,3 +59,5 @@ In a way, we are controlling the Mycorrhizal Network via Pulses with Pulse!
 - Add advertisement/registering of services
 - More efficient Network topology for cluster formation (cohorts of instances build a small star, multiple stars connect)
 - structure nodosum -> commands,packet,acl -> cytoplasm,hypha,mycel,pulse
+- when project is matured: introduce some sort of manifest like what functionalities the implementing software supports
+  - this then can be used to build clusters of applications that are different from each other while still beeing able \n to access shared distributed cache and messaging making modular monoliths possible with microservices that can help out without the overhead of http
