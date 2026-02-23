@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/1password/onepassword-sdk-go"
 	"github.com/hashicorp/memberlist"
 	"github.com/quic-go/quic-go"
 	"go.opentelemetry.io/otel/metric"
@@ -38,7 +37,6 @@ type Nodosum struct {
 	ctx                    context.Context
 	cancel                 context.CancelFunc
 	startOnce              sync.Once
-	onePasswordClient      *onepassword.Client
 	ml                     *memberlist.Memberlist
 	delegate               *Delegate
 	quicListenPort         int
@@ -91,14 +89,6 @@ type quicApplicationStreams struct {
 }
 
 func New(cfg *Config) (*Nodosum, error) {
-	onePassClient, err := onepassword.NewClient(cfg.Ctx,
-		onepassword.WithServiceAccountToken(cfg.OnePasswordToken),
-		onepassword.WithIntegrationInfo("Mycorrhizal auto Cert", "v1.0.0"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	localQuicAddr, err := net.ListenUDP("udp", &net.UDPAddr{Port: cfg.QuicListenPort})
 	if err != nil {
 		return nil, err
@@ -122,7 +112,6 @@ func New(cfg *Config) (*Nodosum, error) {
 		nodeMeta:               cfg.NodeAddrs,
 		ctx:                    ctx,
 		cancel:                 cancel,
-		onePasswordClient:      onePassClient,
 		quicListenPort:         cfg.QuicListenPort,
 		quicAdvertisePort:      cfg.QuicAdvertisePort,
 		quicTransport:          quicTransport,
@@ -134,8 +123,8 @@ func New(cfg *Config) (*Nodosum, error) {
 		meter:                  cfg.Meter,
 		applications:           &applications{applications: make(map[string]*application)},
 		wg:                     cfg.Wg,
-		tlsCaCert:              cfg.TlsCACert,
-		tlsCaKey:               cfg.TlsCAKey,
+		tlsCaCert:              cfg.CACert,
+		tlsCaKey:               cfg.CAKey,
 		readyChan:              make(chan any),
 	}
 
@@ -177,10 +166,6 @@ func New(cfg *Config) (*Nodosum, error) {
 		ClientAuth:   tls.RequireAndVerifyClientCert, // Require mutual TLS
 		NextProtos:   []string{"mycorrizal"},
 	}
-
-	// For Security, unset any onePassword related things
-	n.onePasswordClient = nil
-	cfg.OnePasswordToken = ""
 
 	return n, nil
 }
