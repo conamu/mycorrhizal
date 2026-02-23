@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/conamu/mycorrizal/internal/mycel"
-	"github.com/conamu/mycorrizal/internal/nodosum"
+	"github.com/conamu/mycorrhizal/internal/mycel"
+	"github.com/conamu/mycorrhizal/internal/nodosum"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
