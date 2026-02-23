@@ -126,7 +126,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 		HandshakeTimeout:  cfg.HandshakeTimeout,
 		SharedSecret:      cfg.SharedSecret,
 		TlsCACert:         cfg.ClusterTLSCACert,
-		OnePasswordToken:  cfg.OnePassToken,
+		TlsCAKey:          cfg.ClusterTLSCAKey,
 		MemberlistConfig:  cfg.MemberlistConfig,
 		QuicListenPort:    cfg.QuicListenPort,
 		QuicAdvertisePort: cfg.QuicAdvertisePort,

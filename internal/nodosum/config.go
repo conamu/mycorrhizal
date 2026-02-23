@@ -25,7 +25,6 @@ type Config struct {
 	TlsHostName       string
 	TlsCACert         *x509.Certificate
 	TlsCAKey          *rsa.PrivateKey
-	OnePasswordToken  string
 	MemberlistConfig  *memberlist.Config
 	QuicListenPort    int
 	QuicAdvertisePort int

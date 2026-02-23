@@ -74,6 +74,7 @@ type Config struct {
 	ClusterTLSEnabled  bool
 	ClusterTLSHostName string
 	ClusterTLSCACert   *x509.Certificate
+	ClusterTLSCAKey    *rsa.PrivateKey
 	ClusterTLSCert     *tls.Certificate
 	OnePassToken       string
 	// CaCert will be used with higher priority instead of One Password if CaCert and CaKey are filled.
