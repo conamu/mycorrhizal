@@ -9,17 +9,15 @@ import (
 
 // geoPayload is the wire format for geo replication messages sent via app.Send().
 // ExpiresAt carries the absolute expiry time so that receiving nodes apply the
-// correct remaining TTL regardless of network delay.  TTL is kept for
-// backward-compatibility but ignored on receive when ExpiresAt is non-zero.
+// correct remaining TTL regardless of network delay.
 type geoPayload struct {
 	Operation  uint8
 	Bucket     string
 	UserID     string
 	Lat        float64
 	Lng        float64
-	TTL        time.Duration // deprecated: use ExpiresAt
-	ExpiresAt  time.Time    // absolute expiry; zero means "use bucket default"
-	Precisions []uint       // carried on GEO_SET so receiving nodes can init the store if needed
+	ExpiresAt  time.Time // absolute expiry; zero means "use bucket default"
+	Precisions []uint    // carried on GEO_SET so receiving nodes can init the store if needed
 }
 
 func encodeGeoPayload(p geoPayload) ([]byte, error) {
@@ -61,20 +59,12 @@ func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time
 	s.RUnlock()
 
 	// 2. Broadcast to all other nodes — fire-and-forget via DATA frames.
-	// TTL is set to the remaining duration for backward compatibility with older
-	// nodes that predate the ExpiresAt field and only honour the TTL duration.
-	// New receivers prefer ExpiresAt; old receivers fall back to TTL.
-	legacyTTL := time.Duration(0)
-	if !expiresAt.IsZero() {
-		legacyTTL = time.Until(expiresAt)
-	}
 	payload, err := encodeGeoPayload(geoPayload{
 		Operation:  GEO_SET,
 		Bucket:     bucket,
 		UserID:     userID,
 		Lat:        lat,
 		Lng:        lng,
-		TTL:        legacyTTL,
 		ExpiresAt:  expiresAt,
 		Precisions: precisions,
 	})
@@ -139,12 +129,9 @@ func (c *cache) handleGeoReceive(data []byte) error {
 				c.logger.Warn("geo: failed to init store for replicated bucket", "bucket", p.Bucket, "error", err)
 			}
 		}
-		// Derive remaining TTL:
-		//  1. Prefer ExpiresAt (absolute deadline set by current senders) — this
-		//     avoids extending the entry lifetime by network delay.
-		//  2. Fall back to p.TTL for payloads from older nodes that predate the
-		//     ExpiresAt field (mixed-version clusters or zero-ttl writes).
-		//  A zero remainingTTL means "use bucket default" on the receiving side.
+		// Derive the remaining TTL from the absolute deadline set by the sender.
+		// A zero ExpiresAt means the entry has no expiry — pass 0 to use the
+		// bucket default on the receiving node.
 		var remainingTTL time.Duration
 		if !p.ExpiresAt.IsZero() {
 			remainingTTL = time.Until(p.ExpiresAt)
@@ -153,9 +140,6 @@ func (c *cache) handleGeoReceive(data []byte) error {
 				c.logger.Debug("geo: dropping expired replicated SET", "bucket", p.Bucket, "user", p.UserID)
 				return nil
 			}
-		} else if p.TTL > 0 {
-			// Legacy payload: ExpiresAt not set, honour the raw TTL duration.
-			remainingTTL = p.TTL
 		}
 		return c.geo.setLocationLocal(p.Bucket, p.UserID, p.Lat, p.Lng, remainingTTL)
 	case DELETE:
