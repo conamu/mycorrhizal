@@ -127,6 +127,7 @@ func (g *geoCache) BoundingBox(bucket string, minLat, minLng, maxLat, maxLng flo
 	}
 
 	cells := coveringCells(minLat, minLng, maxLat, maxLng, precision)
+	now := time.Now()
 
 	s.RLock()
 	defer s.RUnlock()
@@ -146,6 +147,11 @@ func (g *geoCache) BoundingBox(bucket string, minLat, minLng, maxLat, maxLng flo
 			}
 			entry, exists := s.points[userID]
 			if !exists {
+				continue
+			}
+			// Skip entries that have expired but haven't been evicted yet
+			// (eviction runs periodically; this prevents stale results).
+			if !entry.ExpiresAt.IsZero() && entry.ExpiresAt.Before(now) {
 				continue
 			}
 			// Exact coordinate filter — geohash cells can straddle the box boundary.

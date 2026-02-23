@@ -73,11 +73,13 @@ func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time
 		return err
 	}
 
-	// Empty ids slice = broadcast to all connected nodes.
-	if err := g.app.Send(payload, []string{}); err != nil {
-		g.logger.Warn("geo: replication broadcast failed", "error", err)
-		// Non-fatal: local write succeeded; other nodes will reconcile on next update.
-	}
+	// Broadcast fire-and-forget in a goroutine so a slow or stalled QUIC
+	// stream write never blocks the caller's goroutine.
+	go func() {
+		if err := g.app.Send(payload, []string{}); err != nil {
+			g.logger.Warn("geo: replication broadcast failed", "error", err)
+		}
+	}()
 
 	return nil
 }
@@ -104,9 +106,13 @@ func (g *geoCache) DeleteLocation(bucket, userID string) error {
 		return err
 	}
 
-	if err := g.app.Send(payload, []string{}); err != nil {
-		g.logger.Warn("geo: delete replication broadcast failed", "error", err)
-	}
+	// Broadcast fire-and-forget in a goroutine so a slow or stalled QUIC
+	// stream write never blocks the caller's goroutine.
+	go func() {
+		if err := g.app.Send(payload, []string{}); err != nil {
+			g.logger.Warn("geo: delete replication broadcast failed", "error", err)
+		}
+	}()
 
 	return nil
 }
@@ -144,7 +150,12 @@ func (c *cache) handleGeoReceive(data []byte) error {
 		return c.geo.setLocationLocal(p.Bucket, p.UserID, p.Lat, p.Lng, remainingTTL)
 	case DELETE:
 		c.logger.Debug("geo: received replicated DELETE", "bucket", p.Bucket, "user", p.UserID)
-		return c.geo.deleteLocationLocal(p.Bucket, p.UserID)
+		if err := c.geo.deleteLocationLocal(p.Bucket, p.UserID); err != nil {
+			// ERR_USER_NOT_FOUND is expected (entry may have already been evicted or
+			// never existed on this replica) — log at DEBUG to aid troubleshooting.
+			c.logger.Debug("geo: replicated DELETE failed (may be expected)", "bucket", p.Bucket, "user", p.UserID, "error", err)
+		}
+		return nil
 	default:
 		c.logger.Warn("geo: unknown operation in receive payload", "op", p.Operation)
 	}
