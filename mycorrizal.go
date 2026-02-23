@@ -116,19 +116,20 @@ func New(cfg *Config) (Mycorrizal, error) {
 	meter := otel.GetMeterProvider().Meter("mycorrhizal")
 
 	nodosumConfig := &nodosum.Config{
-		NodeId:           id,
-		NodeAddrs:        &nodeMeta,
-		Ctx:              ctx,
-		ListenPort:       cfg.ListenPort,
-		Logger:           cfg.Logger,
-		Meter:            meter,
-		Wg:               &sync.WaitGroup{},
-		HandshakeTimeout: cfg.HandshakeTimeout,
-		SharedSecret:     cfg.SharedSecret,
-		TlsCACert:        cfg.ClusterTLSCACert,
-		OnePasswordToken: cfg.OnePassToken,
-		MemberlistConfig: cfg.MemberlistConfig,
-		QuicPort:         cfg.QuicPort,
+		NodeId:            id,
+		NodeAddrs:         &nodeMeta,
+		Ctx:               ctx,
+		ListenPort:        cfg.ListenPort,
+		Logger:            cfg.Logger,
+		Meter:             meter,
+		Wg:                &sync.WaitGroup{},
+		HandshakeTimeout:  cfg.HandshakeTimeout,
+		SharedSecret:      cfg.SharedSecret,
+		TlsCACert:         cfg.ClusterTLSCACert,
+		OnePasswordToken:  cfg.OnePassToken,
+		MemberlistConfig:  cfg.MemberlistConfig,
+		QuicListenPort:    cfg.QuicListenPort,
+		QuicAdvertisePort: cfg.QuicAdvertisePort,
 	}
 
 	ndsm, err := nodosum.New(nodosumConfig)

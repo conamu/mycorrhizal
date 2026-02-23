@@ -13,19 +13,20 @@ import (
 )
 
 type Config struct {
-	NodeId           string
-	NodeAddrs        *NodeMetaMap
-	Ctx              context.Context
-	ListenPort       int
-	SharedSecret     string
-	HandshakeTimeout time.Duration
-	Logger           *slog.Logger
-	Meter            metric.Meter
-	Wg               *sync.WaitGroup
-	TlsHostName      string
-	TlsCACert        *x509.Certificate
-	TlsCAKey         *rsa.PrivateKey
-	OnePasswordToken string
-	MemberlistConfig *memberlist.Config
-	QuicPort         int
+	NodeId            string
+	NodeAddrs         *NodeMetaMap
+	Ctx               context.Context
+	ListenPort        int
+	SharedSecret      string
+	HandshakeTimeout  time.Duration
+	Logger            *slog.Logger
+	Meter             metric.Meter
+	Wg                *sync.WaitGroup
+	TlsHostName       string
+	TlsCACert         *x509.Certificate
+	TlsCAKey          *rsa.PrivateKey
+	OnePasswordToken  string
+	MemberlistConfig  *memberlist.Config
+	QuicListenPort    int
+	QuicAdvertisePort int
 }

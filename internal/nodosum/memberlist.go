@@ -209,7 +209,7 @@ func (d Delegate) NotifyMerge(peers []*memberlist.Node) error {
 // NodeMeta is used to exchange quic connection info
 func (d Delegate) NodeMeta(limit int) []byte {
 	portBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(portBytes, uint16(d.quicPort))
+	binary.BigEndian.PutUint16(portBytes, uint16(d.quicAdvertisePort))
 	return portBytes
 }
 

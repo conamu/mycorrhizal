@@ -41,12 +41,12 @@ type Nodosum struct {
 	onePasswordClient      *onepassword.Client
 	ml                     *memberlist.Memberlist
 	delegate               *Delegate
-	quicPort               int
+	quicListenPort         int
+	quicAdvertisePort      int
 	quicTransport          *quic.Transport
 	quicConfig             *quic.Config
 	quicConns              *quicConns
 	quicApplicationStreams *quicApplicationStreams
-	udpConn                *net.UDPConn
 	sharedSecret           string
 	logger                 *slog.Logger
 	meter                  metric.Meter
@@ -89,10 +89,7 @@ func New(cfg *Config) (*Nodosum, error) {
 		return nil, err
 	}
 
-	udpLocalAddr := &net.UDPAddr{Port: cfg.ListenPort}
-	udpConn, err := net.ListenUDP("udp", udpLocalAddr)
-
-	localQuicAddr, err := net.ListenUDP("udp", &net.UDPAddr{Port: cfg.QuicPort})
+	localQuicAddr, err := net.ListenUDP("udp", &net.UDPAddr{Port: cfg.QuicListenPort})
 	if err != nil {
 		return nil, err
 	}
@@ -116,12 +113,12 @@ func New(cfg *Config) (*Nodosum, error) {
 		ctx:                    ctx,
 		cancel:                 cancel,
 		onePasswordClient:      onePassClient,
-		quicPort:               cfg.QuicPort,
+		quicListenPort:         cfg.QuicListenPort,
+		quicAdvertisePort:      cfg.QuicAdvertisePort,
 		quicTransport:          quicTransport,
 		quicConfig:             quicConf,
 		quicConns:              &quicConns{conns: make(map[string]*quic.Conn)},
 		quicApplicationStreams: &quicApplicationStreams{streams: make(map[string]*quic.Stream)},
-		udpConn:                udpConn,
 		sharedSecret:           cfg.SharedSecret,
 		logger:                 cfg.Logger,
 		meter:                  cfg.Meter,
@@ -141,8 +138,6 @@ func New(cfg *Config) (*Nodosum, error) {
 
 	cfg.MemberlistConfig.Events = delegate
 	cfg.MemberlistConfig.Delegate = delegate
-	cfg.MemberlistConfig.AdvertiseAddr = "127.0.0.1"
-	cfg.MemberlistConfig.BindAddr = "127.0.0.1"
 	cfg.MemberlistConfig.LogOutput = os.Stdout
 	cfg.MemberlistConfig.SecretKey = []byte(cfg.SharedSecret)
 	cfg.MemberlistConfig.Name = cfg.NodeId
@@ -271,10 +266,6 @@ func (n *Nodosum) Shutdown() {
 		n.logger.Error("ml failed to leave properly", "err", err)
 	}
 	n.cancel()
-	err = n.udpConn.Close()
-	if err != nil {
-		n.logger.Error("failed to close UDP connection", "err", err)
-	}
 	n.logger.Debug("nodosum shutdown waiting on routines to exit...")
 	n.wg.Wait()
 }
