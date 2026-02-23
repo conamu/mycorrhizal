@@ -36,7 +36,7 @@ func (n *Nodosum) generateNodeCert(additionalIPs ...net.IP) (*tls.Certificate, *
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName:   n.nodeId,
-			Organization: []string{"Mycorrizal Cluster"},
+			Organization: []string{"Mycorrhizal Cluster"},
 		},
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(365 * 24 * time.Hour), // 1 year validity

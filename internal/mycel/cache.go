@@ -298,14 +298,14 @@ func (c *cache) setTtlReplicated(bucket, key string, ttl time.Duration) error {
 		if err := <-results; err == nil {
 			successCount++
 		} else {
-			c.logger.Warn(fmt.Sprintf("replica setttl failed for key %s/%s: %v", bucket, key, err))
+			c.logger.Warn(fmt.Sprintf("replica set ttl failed for key %s/%s: %v", bucket, key, err))
 			lastErr = err
 		}
 	}
 
 	quorum := (len(replicaSet) / 2) + 1
 	if successCount < quorum {
-		return fmt.Errorf("setttl failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
+		return fmt.Errorf("set ttl failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
 	}
 	return nil
 }

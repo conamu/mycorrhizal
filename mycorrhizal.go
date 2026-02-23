@@ -52,7 +52,7 @@ type mycorrizal struct {
 func New(cfg *Config) (Mycorrizal, error) {
 	ctx := cfg.Ctx
 
-	id := os.Getenv("MYCORRIZAL_ID")
+	id := os.Getenv("MYCORRHIZAL_ID")
 
 	if id == "" {
 		// Use the IDs of env variable to enable
@@ -95,7 +95,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	if cfg.DiscoveryMode == DC_MODE_STATIC && cfg.NodeAddrs == nil {
-		return nil, errors.New("static discovery mode reuires NodeAddrs to be set")
+		return nil, errors.New("static discovery mode requires NodeAddrs to be set")
 	}
 
 	if cfg.DiscoveryMode == DC_MODE_STATIC && len(cfg.NodeAddrs) == 0 {
@@ -254,9 +254,9 @@ func (mc *mycorrizal) Shutdown() error {
 	}
 
 	mc.cancel()
-	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
+	mc.logger.Debug("mycorrhizal shutting down waiting on goroutines...")
 	mc.wg.Wait()
-	mc.logger.Info("mycorrizal shutdown complete")
+	mc.logger.Info("mycorrhizal shutdown complete")
 	return nil
 }
 
