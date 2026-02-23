@@ -61,6 +61,14 @@ func New(cfg *Config) (Mycorrizal, error) {
 		id = uuid.NewString()
 	}
 
+	if cfg.CaCert == nil {
+		return nil, errors.New("missing CA certificate. Provide an intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
+	}
+
+	if cfg.CaKey == nil {
+		return nil, errors.New("missing CA key. Provide an intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
+	}
+
 	var httpClient *http.Client
 	if cfg.DiscoveryMode == DC_MODE_CONSUL {
 		var tlsConfig *tls.Config

@@ -71,8 +71,9 @@ type Config struct {
 		Default: 2 seconds
 	*/
 	HandshakeTimeout time.Duration
-	// CaCert will be used with higher priority instead of One Password if CaCert and CaKey are filled.
-	CaCert                 *x509.Certificate
+	// CaCert is mandatory
+	CaCert *x509.Certificate
+	// CaKey is mandatory
 	CaKey                  *rsa.PrivateKey
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
