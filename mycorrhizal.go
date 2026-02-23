@@ -52,13 +52,21 @@ type mycorrizal struct {
 func New(cfg *Config) (Mycorrizal, error) {
 	ctx := cfg.Ctx
 
-	id := os.Getenv("MYCORRIZAL_ID")
+	id := os.Getenv("MYCORRHIZAL_ID")
 
 	if id == "" {
 		// Use the IDs of env variable to enable
 		// having the same IDs as the containers in the
 		// Orchestrator for better visibility or generate own IDs
 		id = uuid.NewString()
+	}
+
+	if cfg.CaCert == nil {
+		return nil, errors.New("missing CA certificate. Provide an intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
+	}
+
+	if cfg.CaKey == nil {
+		return nil, errors.New("missing CA key. Provide an intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
 	}
 
 	var httpClient *http.Client
@@ -87,7 +95,7 @@ func New(cfg *Config) (Mycorrizal, error) {
 	}
 
 	if cfg.DiscoveryMode == DC_MODE_STATIC && cfg.NodeAddrs == nil {
-		return nil, errors.New("static discovery mode reuires NodeAddrs to be set")
+		return nil, errors.New("static discovery mode requires NodeAddrs to be set")
 	}
 
 	if cfg.DiscoveryMode == DC_MODE_STATIC && len(cfg.NodeAddrs) == 0 {
@@ -125,8 +133,8 @@ func New(cfg *Config) (Mycorrizal, error) {
 		Wg:                &sync.WaitGroup{},
 		HandshakeTimeout:  cfg.HandshakeTimeout,
 		SharedSecret:      cfg.SharedSecret,
-		TlsCACert:         cfg.ClusterTLSCACert,
-		OnePasswordToken:  cfg.OnePassToken,
+		CACert:            cfg.CaCert,
+		CAKey:             cfg.CaKey,
 		MemberlistConfig:  cfg.MemberlistConfig,
 		QuicListenPort:    cfg.QuicListenPort,
 		QuicAdvertisePort: cfg.QuicAdvertisePort,
@@ -246,9 +254,9 @@ func (mc *mycorrizal) Shutdown() error {
 	}
 
 	mc.cancel()
-	mc.logger.Debug("mycorrizal shutting down waiting on goroutines...")
+	mc.logger.Debug("mycorrhizal shutting down waiting on goroutines...")
 	mc.wg.Wait()
-	mc.logger.Info("mycorrizal shutdown complete")
+	mc.logger.Info("mycorrhizal shutdown complete")
 	return nil
 }
 

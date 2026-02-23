@@ -55,7 +55,7 @@ If a bucket is set as persisted, all data  will be stored.
 The Bucket will hold any data according to its LRU and TTL configuration.
 If data ways evicted it can be looked up from the s3 based storage
 
-The data is replicated across a minimum of 3 nodes. Owner and backup nodes are calculated by rendezvouz hashing.
+The data is replicated across a minimum of 3 nodes. Owner and backup nodes are calculated by rendezvous hashing.
 
 All data lives locally on the nodes, organized in buckets. LRUs and TTLs are Node scoped.
 Data of one bucket can exist on many different nodes.
@@ -70,7 +70,7 @@ storage and transfer encoding is gob.
 
 Local data is accessed though direct pointers, only transfers and storage gets gob encoding.
 
-Explore using S3 for replication/data log in comparison to directly transfering all data to a new node.
+Explore using S3 for replication/data log in comparison to directly transferring all data to a new node.
 
 */
 

@@ -14,7 +14,7 @@ const (
 )
 
 func newMetrics(m metric.Meter) (*metrics, error) {
-	gets, err := m.Int64Counter("mycorrizal.cache.gets",
+	gets, err := m.Int64Counter("mycorrhizal.cache.gets",
 		metric.WithDescription("Total get operations"),
 		metric.WithUnit("{request}"),
 	)
@@ -22,7 +22,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	sets, err := m.Int64Counter("mycorrizal.cache.sets",
+	sets, err := m.Int64Counter("mycorrhizal.cache.sets",
 		metric.WithDescription("Total set operations"),
 		metric.WithUnit("{request}"),
 	)
@@ -30,7 +30,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	deletes, err := m.Int64Counter("mycorrizal.cache.deletes",
+	deletes, err := m.Int64Counter("mycorrhizal.cache.deletes",
 		metric.WithDescription("Total delete operations"),
 		metric.WithUnit("{request}"),
 	)
@@ -38,7 +38,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	ttlUpdates, err := m.Int64Counter("mycorrizal.cache.ttl_updates",
+	ttlUpdates, err := m.Int64Counter("mycorrhizal.cache.ttl_updates",
 		metric.WithDescription("Total SetTtl operations"),
 		metric.WithUnit("{request}"),
 	)
@@ -46,7 +46,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	hits, err := m.Int64Counter("mycorrizal.cache.hits",
+	hits, err := m.Int64Counter("mycorrhizal.cache.hits",
 		metric.WithDescription("Successful get lookups"),
 		metric.WithUnit("{request}"),
 	)
@@ -54,7 +54,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	misses, err := m.Int64Counter("mycorrizal.cache.misses",
+	misses, err := m.Int64Counter("mycorrhizal.cache.misses",
 		metric.WithDescription("Failed get lookups"),
 		metric.WithUnit("{request}"),
 	)
@@ -62,7 +62,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	lruEvictions, err := m.Int64Counter("mycorrizal.cache.lru_evictions",
+	lruEvictions, err := m.Int64Counter("mycorrhizal.cache.lru_evictions",
 		metric.WithDescription("Items dropped due to maxLen"),
 		metric.WithUnit("{item}"),
 	)
@@ -70,7 +70,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	ttlEvictions, err := m.Int64Counter("mycorrizal.cache.ttl_evictions",
+	ttlEvictions, err := m.Int64Counter("mycorrhizal.cache.ttl_evictions",
 		metric.WithDescription("Items expired by TTL worker"),
 		metric.WithUnit("{item}"),
 	)
@@ -78,7 +78,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	bucketSize, err := m.Int64UpDownCounter("mycorrizal.cache.bucket.size",
+	bucketSize, err := m.Int64UpDownCounter("mycorrhizal.cache.bucket.size",
 		metric.WithDescription("Current item count per bucket"),
 		metric.WithUnit("{item}"),
 	)
@@ -86,7 +86,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	duration, err := m.Int64Histogram("mycorrizal.cache.duration",
+	duration, err := m.Int64Histogram("mycorrhizal.cache.duration",
 		metric.WithDescription("Operation latency by locality (local or remote)"),
 		metric.WithUnit("ms"),
 	)
@@ -94,7 +94,7 @@ func newMetrics(m metric.Meter) (*metrics, error) {
 		return nil, err
 	}
 
-	errors, err := m.Int64Counter("mycorrizal.cache.errors",
+	errors, err := m.Int64Counter("mycorrhizal.cache.errors",
 		metric.WithDescription("Failed operations by locality (local or remote)"),
 		metric.WithUnit("{error}"),
 	)
