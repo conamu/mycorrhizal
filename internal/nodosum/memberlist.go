@@ -109,6 +109,19 @@ func (d Delegate) NotifyJoin(node *memberlist.Node) {
 	delete(d.dta.att, node.Name)
 	d.dta.Unlock()
 
+	// Notify topology hook (async to avoid blocking memberlist callback)
+	if hook := d.Nodosum.topologyChangeHook(); hook != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					d.logger.Error("panic in topology hook recovered", "panic", r, "node", node.Name)
+					debug.PrintStack()
+				}
+			}()
+			hook(node.Name, true)
+		}()
+	}
+
 	d.logger.Info("quic connection established",
 		"remoteNodeID", node.Name,
 		"remoteAddr", conn.RemoteAddr().String(),
@@ -123,6 +136,19 @@ func (d Delegate) NotifyLeave(node *memberlist.Node) {
 	delete(d.dta.att, node.Name)
 	d.dta.Unlock()
 	d.logger.Debug("node left", "node", node.Name)
+
+	// Notify topology hook (async to avoid blocking memberlist callback)
+	if hook := d.Nodosum.topologyChangeHook(); hook != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					d.logger.Error("panic in topology hook recovered", "panic", r, "node", node.Name)
+					debug.PrintStack()
+				}
+			}()
+			hook(node.Name, false)
+		}()
+	}
 }
 
 func (d Delegate) NotifyUpdate(node *memberlist.Node) {
