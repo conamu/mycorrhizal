@@ -71,6 +71,10 @@ Explore using S3 for replication/data log in comparison to directly transfering 
 */
 
 func New(cfg *Config) (Mycel, error) {
+	if cfg.Replicas < 1 {
+		return nil, errors.New("mycel: Replicas must be >= 1")
+	}
+
 	ctx, cancel := context.WithCancel(cfg.Ctx)
 
 	m := &mycel{

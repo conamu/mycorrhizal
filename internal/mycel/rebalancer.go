@@ -137,7 +137,7 @@ func (r *rebalancer) rebalancerWorkerTask(w *worker.Worker, msg any) {
 				return
 			}
 
-			fullKey := bucketName + ks.key
+			fullKey := routingKey(bucketName, ks.key)
 			replicas := r.cache.getReplicas(fullKey)
 			limit := r.cache.replicas
 			if len(replicas) < limit {

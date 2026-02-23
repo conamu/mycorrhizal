@@ -3,6 +3,7 @@ package mycel
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -28,19 +29,18 @@ func (c *cache) CreateBucket(name string, ttl time.Duration, maxLen int) error {
 }
 
 func (c *cache) Get(bucket, key string) (any, error) {
-	locality := localityLocal
-	if !c.isLocal(bucket, key) {
-		locality = localityRemote
+	// Try local first — O(1) keyVal map lookup. This hits for any node that
+	// holds a replica of the key (primary or secondary), without consulting
+	// isLocal() or making a network call.
+	if val, err := c.getLocal(bucket, key); err == nil {
+		done := c.trackGet(bucket, localityLocal)
+		done(true)
+		return val, nil
 	}
-	done := c.trackGet(bucket, locality)
 
-	var val any
-	var err error
-	if locality == localityLocal {
-		val, err = c.getLocal(bucket, key)
-	} else {
-		val, err = c.getRemote(bucket, key)
-	}
+	// Key not in local store. Route to the primary node.
+	done := c.trackGet(bucket, localityRemote)
+	val, err := c.getRemote(bucket, key)
 	done(err == nil)
 	return val, err
 }
@@ -92,7 +92,7 @@ func (c *cache) SetTtl(bucket, key string, ttl time.Duration) error {
 // getPrimaryNode returns the primary replica node ID for a key, using nodeScoreHashMap as a cache.
 // Uses getReplicas() only on cache miss.
 func (c *cache) getPrimaryNode(bucket, key string) string {
-	fullKey := bucket + key
+	fullKey := routingKey(bucket, key)
 	c.nodeScoreHashMap.RLock()
 	if id, exists := c.nodeScoreHashMap.data[fullKey]; exists {
 		c.nodeScoreHashMap.RUnlock()
@@ -112,7 +112,7 @@ func (c *cache) getPrimaryNode(bucket, key string) string {
 // isLocal returns true if this node is among the top-N replicas for the given key.
 // Uses replicaLocalityCache for O(1) lookups on the hot path; falls back to getReplicas() on miss.
 func (c *cache) isLocal(bucket, key string) bool {
-	fullKey := bucket + key
+	fullKey := routingKey(bucket, key)
 
 	c.replicaLocalityCache.RLock()
 	if isLocal, exists := c.replicaLocalityCache.data[fullKey]; exists {
@@ -154,7 +154,7 @@ func (c *cache) invalidateCaches() {
 
 // getReplicaNodes returns the top-N replica nodes for a key (N = c.replicas).
 func (c *cache) getReplicaNodes(bucket, key string) []replicaNode {
-	replicas := c.getReplicas(bucket + key)
+	replicas := c.getReplicas(routingKey(bucket, key))
 	limit := c.replicas
 	if len(replicas) < limit {
 		limit = len(replicas)
@@ -270,6 +270,12 @@ func (c *cache) setTtlReplicated(bucket, key string, ttl time.Duration) error {
 		return fmt.Errorf("setttl failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
 	}
 	return nil
+}
+
+// routingKey builds an unambiguous composite key from a bucket name and item key,
+// using a length prefix to prevent collisions (e.g. bucket "ab"+key "c" vs bucket "a"+key "bc").
+func routingKey(bucket, key string) string {
+	return strconv.Itoa(len(bucket)) + ":" + bucket + key
 }
 
 // shutdown will gracefully mark the node as dead and sign off from the network
