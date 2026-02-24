@@ -16,7 +16,7 @@
     }
   ],
   "title": "Mycorrhizal",
-  "description": "A Dashboard to vidualize all the Data and information regarding the used Mycorrhizal library in the applications.",
+  "description": "A Dashboard to visualize all the Data and information regarding the used Mycorrhizal library in the applications.",
   "uid": "mycorrhizal-main",
   "schemaVersion": 38,
   "version": 1,
@@ -30,7 +30,7 @@
         "label": "Service Name",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-        "query": "label_values(mycorrizal_cache_gets_total, service_name)",
+        "query": "label_values(mycorrhizal_cache_gets_total, service_name)",
         "multi": false,
         "includeAll": false,
         "refresh": 2
@@ -40,7 +40,7 @@
         "label": "Bucket",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-        "query": "label_values(mycorrizal_cache_gets_total{service_name=\"$service_name\"}, cache_bucket)",
+        "query": "label_values(mycorrhizal_cache_gets_total{service_name=\"$service_name\"}, cache_bucket)",
         "multi": true,
         "includeAll": true,
         "allValue": ".*",
@@ -58,13 +58,9 @@
     ]
   },
   "panels": [
-    {
-      "id": 1,
-      "type": "row",
-      "title": "Cache Operations",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
-      "collapsed": false
-    },
+
+    { "id": 1, "type": "row", "title": "Cache Operations", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "collapsed": false },
+
     {
       "id": 2,
       "type": "timeseries",
@@ -72,20 +68,16 @@
       "description": "Cache get operations per second, split by bucket and locality",
       "gridPos": { "x": 0, "y": 1, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrizal_cache_gets_total{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
+          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrhizal_cache_gets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
           "legendFormat": "{{cache_bucket}} / {{cache_locality}}"
         }
       ]
     },
+
     {
       "id": 3,
       "type": "timeseries",
@@ -93,60 +85,48 @@
       "description": "Cache set operations per second, split by bucket and locality",
       "gridPos": { "x": 12, "y": 1, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrizal_cache_sets_total{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
+          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrhizal_cache_sets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
           "legendFormat": "{{cache_bucket}} / {{cache_locality}}"
         }
       ]
     },
+
     {
       "id": 4,
       "type": "timeseries",
       "title": "Deletes per Second",
       "gridPos": { "x": 0, "y": 9, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrizal_cache_deletes_total{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
+          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrhizal_cache_deletes_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
           "legendFormat": "{{cache_bucket}} / {{cache_locality}}"
         }
       ]
     },
+
     {
       "id": 5,
       "type": "timeseries",
       "title": "TTL Updates per Second",
       "gridPos": { "x": 8, "y": 9, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrizal_cache_ttl_updates_total{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
+          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrhizal_cache_ttl_updates_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
           "legendFormat": "{{cache_bucket}} / {{cache_locality}}"
         }
       ]
     },
+
     {
       "id": 6,
       "type": "timeseries",
@@ -163,18 +143,14 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrizal_cache_errors_total{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
+          "expr": "sum by (cache_bucket, cache_locality) (rate(mycorrhizal_cache_errors_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m]))",
           "legendFormat": "{{cache_bucket}} / {{cache_locality}}"
         }
       ]
     },
-    {
-      "id": 7,
-      "type": "row",
-      "title": "Hit Rate & Latency",
-      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 1 },
-      "collapsed": false
-    },
+
+    { "id": 7, "type": "row", "title": "Hit Rate & Latency", "gridPos": { "x": 0, "y": 17, "w": 24, "h": 1 }, "collapsed": false },
+
     {
       "id": 8,
       "type": "timeseries",
@@ -201,11 +177,12 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket) (rate(mycorrizal_cache_hits_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])) / sum by (cache_bucket) (rate(mycorrizal_cache_gets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_hits_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])) / sum by (cache_bucket) (rate(mycorrhizal_cache_gets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
           "legendFormat": "{{cache_bucket}}"
         }
       ]
     },
+
     {
       "id": 9,
       "type": "timeseries",
@@ -213,56 +190,43 @@
       "description": "End-to-end operation latency split by locality",
       "gridPos": { "x": 12, "y": 18, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "custom": { "lineWidth": 2, "fillOpacity": 5 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 2, "fillOpacity": 5 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le, cache_locality) (rate(mycorrizal_cache_duration_bucket{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum by (le, cache_locality) (rate(mycorrhizal_cache_duration_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m])))",
           "legendFormat": "p50 / {{cache_locality}}"
         },
         {
-          "expr": "histogram_quantile(0.95, sum by (le, cache_locality) (rate(mycorrizal_cache_duration_bucket{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, cache_locality) (rate(mycorrhizal_cache_duration_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m])))",
           "legendFormat": "p95 / {{cache_locality}}"
         },
         {
-          "expr": "histogram_quantile(0.99, sum by (le, cache_locality) (rate(mycorrizal_cache_duration_bucket{service_name=\"$service_name\",cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (le, cache_locality) (rate(mycorrhizal_cache_duration_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\", cache_locality=~\"$locality\"}[1m])))",
           "legendFormat": "p99 / {{cache_locality}}"
         }
       ]
     },
-    {
-      "id": 10,
-      "type": "row",
-      "title": "Bucket Health",
-      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 1 },
-      "collapsed": false
-    },
+
+    { "id": 10, "type": "row", "title": "Bucket Health", "gridPos": { "x": 0, "y": 26, "w": 24, "h": 1 }, "collapsed": false },
+
     {
       "id": 11,
       "type": "timeseries",
       "title": "Bucket Size",
-      "description": "Current number of items per bucket",
+      "description": "Current number of items per bucket (regular cache buckets only)",
       "gridPos": { "x": 0, "y": 27, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "mycorrizal_cache_bucket_size{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}",
+          "expr": "mycorrhizal_cache_bucket_size{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}",
           "legendFormat": "{{cache_bucket}}"
         }
       ]
     },
+
     {
       "id": 12,
       "type": "timeseries",
@@ -270,24 +234,20 @@
       "description": "LRU and TTL evictions per second by bucket",
       "gridPos": { "x": 12, "y": 27, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket) (rate(mycorrizal_cache_lru_evictions_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_lru_evictions_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
           "legendFormat": "LRU / {{cache_bucket}}"
         },
         {
-          "expr": "sum by (cache_bucket) (rate(mycorrizal_cache_ttl_evictions_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_ttl_evictions_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
           "legendFormat": "TTL / {{cache_bucket}}"
         }
       ]
     },
+
     {
       "id": 13,
       "type": "timeseries",
@@ -312,48 +272,398 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket) (rate(mycorrizal_cache_lru_evictions_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])) / sum by (cache_bucket) (rate(mycorrizal_cache_sets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_lru_evictions_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])) / sum by (cache_bucket) (rate(mycorrhizal_cache_sets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
           "legendFormat": "{{cache_bucket}}"
         }
       ]
     },
+
     {
       "id": 14,
       "type": "timeseries",
       "title": "Hits vs Misses",
       "gridPos": { "x": 12, "y": 35, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_hits_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "hits / {{cache_bucket}}"
+        },
+        {
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_misses_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "misses / {{cache_bucket}}"
+        }
+      ]
+    },
+
+    { "id": 30, "type": "row", "title": "Distributed Write Path", "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Replica Writes per Second",
+      "description": "Per-replica write outcomes (success vs failure) during replicated Set and Delete operations",
+      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "failure" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "success",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_replica_writes_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", result=\"success\"}[1m]))",
+          "legendFormat": "success / {{cache_bucket}}"
+        },
+        {
+          "refId": "failure",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_replica_writes_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\", result=\"failure\"}[1m]))",
+          "legendFormat": "failure / {{cache_bucket}}"
+        }
+      ]
+    },
+
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Quorum Failures per Second",
+      "description": "Replicated writes or deletes that could not reach a majority of replicas. Any value > 0 is a data durability concern.",
+      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 0.001 }
+            ]
+          }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_cache_quorum_failures_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "{{cache_bucket}}"
+        }
+      ]
+    },
+
+    { "id": 40, "type": "row", "title": "Rebalancer", "gridPos": { "x": 0, "y": 52, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Rebalancer Cycle Duration",
+      "description": "Wall-clock time each rebalancer cycle takes to complete (p50 / p95 / p99). Spikes indicate a large number of keys to process.",
+      "gridPos": { "x": 0, "y": 53, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 2, "fillOpacity": 5 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(mycorrhizal_rebalancer_duration_bucket{service_name=\"$service_name\"}[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(mycorrhizal_rebalancer_duration_bucket{service_name=\"$service_name\"}[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(mycorrhizal_rebalancer_duration_bucket{service_name=\"$service_name\"}[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Rebalancer Key Throughput",
+      "description": "Keys processed, evicted, and successfully replicated per rebalancer cycle",
+      "gridPos": { "x": 12, "y": 53, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "increase(mycorrhizal_rebalancer_keys_processed_total{service_name=\"$service_name\"}[5m])",
+          "legendFormat": "keys processed"
+        },
+        {
+          "expr": "increase(mycorrhizal_rebalancer_keys_evicted_total{service_name=\"$service_name\"}[5m])",
+          "legendFormat": "keys evicted"
+        },
+        {
+          "expr": "increase(mycorrhizal_rebalancer_replication_attempts_total{service_name=\"$service_name\"}[5m])",
+          "legendFormat": "replication attempts"
+        }
+      ]
+    },
+
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Rebalancer Replication Error Rate",
+      "description": "Failed outbound key replications during rebalancer cycles. Sustained errors indicate unreachable peers.",
+      "gridPos": { "x": 0, "y": 61, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": { "fixedColor": "red", "mode": "fixed" },
           "custom": { "lineWidth": 2, "fillOpacity": 10 }
         }
       },
       "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum by (cache_bucket) (rate(mycorrizal_cache_hits_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
-          "legendFormat": "hits / {{cache_bucket}}"
-        },
-        {
-          "expr": "sum by (cache_bucket) (rate(mycorrizal_cache_misses_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
-          "legendFormat": "misses / {{cache_bucket}}"
+          "expr": "sum(rate(mycorrhizal_rebalancer_replication_errors_total{service_name=\"$service_name\"}[1m]))",
+          "legendFormat": "replication errors/s"
         }
       ]
     },
+
     {
-      "id": 20,
-      "type": "row",
-      "title": "Logs",
-      "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 },
-      "collapsed": false
+      "id": 44,
+      "type": "stat",
+      "title": "Rebalancer Cycles (last hour)",
+      "description": "Total number of rebalancer cycles that have completed in the selected time range",
+      "gridPos": { "x": 12, "y": 61, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": 0 }]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "horizontal", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "expr": "increase(mycorrhizal_rebalancer_cycles_total{service_name=\"$service_name\"}[$__range])",
+          "legendFormat": "cycles"
+        }
+      ]
     },
+
+    { "id": 50, "type": "row", "title": "Cluster & Topology", "gridPos": { "x": 0, "y": 69, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 51,
+      "type": "timeseries",
+      "title": "Topology Change Events per Second",
+      "description": "Rate of node join and leave events. Sustained churn will trigger frequent rebalancer runs and cache invalidations.",
+      "gridPos": { "x": 0, "y": 70, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (event) (rate(mycorrhizal_cluster_topology_changes_total{service_name=\"$service_name\"}[1m]))",
+          "legendFormat": "{{event}}"
+        }
+      ]
+    },
+
+    {
+      "id": 52,
+      "type": "stat",
+      "title": "Topology Changes (last hour)",
+      "description": "Total join and leave events in the selected time range",
+      "gridPos": { "x": 12, "y": 70, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "horizontal", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "expr": "increase(mycorrhizal_cluster_topology_changes_total{service_name=\"$service_name\", event=\"join\"}[$__range])",
+          "legendFormat": "joins"
+        },
+        {
+          "expr": "increase(mycorrhizal_cluster_topology_changes_total{service_name=\"$service_name\", event=\"leave\"}[$__range])",
+          "legendFormat": "leaves"
+        }
+      ]
+    },
+
+    { "id": 60, "type": "row", "title": "Geo Cache", "gridPos": { "x": 0, "y": 78, "w": 24, "h": 1 }, "collapsed": false },
+
+    {
+      "id": 61,
+      "type": "timeseries",
+      "title": "Geo Bucket Size",
+      "description": "Current number of location entries per geo bucket across all nodes",
+      "gridPos": { "x": 0, "y": 79, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "mycorrhizal_geo_bucket_size{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}",
+          "legendFormat": "{{cache_bucket}}"
+        }
+      ]
+    },
+
+    {
+      "id": 62,
+      "type": "timeseries",
+      "title": "Geo Set & Delete Rate",
+      "description": "SetLocation and DeleteLocation calls per second",
+      "gridPos": { "x": 12, "y": 79, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_geo_sets_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "sets / {{cache_bucket}}"
+        },
+        {
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_geo_deletes_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "deletes / {{cache_bucket}}"
+        }
+      ]
+    },
+
+    {
+      "id": 63,
+      "type": "timeseries",
+      "title": "Geo Query Rate",
+      "description": "BoundingBox and RadiusQuery calls per second by bucket",
+      "gridPos": { "x": 0, "y": 87, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (cache_bucket, query_type) (rate(mycorrhizal_geo_queries_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "{{query_type}} / {{cache_bucket}}"
+        }
+      ]
+    },
+
+    {
+      "id": 64,
+      "type": "timeseries",
+      "title": "Geo Query Latency p50 / p95 / p99",
+      "description": "End-to-end latency of spatial queries, split by query type. All queries are resolved locally with zero network hops.",
+      "gridPos": { "x": 12, "y": 87, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 2, "fillOpacity": 5 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, query_type) (rate(mycorrhizal_geo_query_duration_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])))",
+          "legendFormat": "p50 / {{query_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, query_type) (rate(mycorrhizal_geo_query_duration_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])))",
+          "legendFormat": "p95 / {{query_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, query_type) (rate(mycorrhizal_geo_query_duration_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])))",
+          "legendFormat": "p99 / {{query_type}}"
+        }
+      ]
+    },
+
+    {
+      "id": 65,
+      "type": "timeseries",
+      "title": "Geo Query Result Set Size",
+      "description": "Distribution of how many entries are returned per query (p50 / p95 / p99). Large result sets may indicate precision is too coarse.",
+      "gridPos": { "x": 0, "y": 95, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 5 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, query_type) (rate(mycorrhizal_geo_query_results_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])))",
+          "legendFormat": "p50 / {{query_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, query_type) (rate(mycorrhizal_geo_query_results_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])))",
+          "legendFormat": "p95 / {{query_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, query_type) (rate(mycorrhizal_geo_query_results_bucket{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m])))",
+          "legendFormat": "p99 / {{query_type}}"
+        }
+      ]
+    },
+
+    {
+      "id": 66,
+      "type": "timeseries",
+      "title": "Geo Replication Traffic",
+      "description": "Frames sent to and received from peers, plus frames dropped because they arrived after their entry expired",
+      "gridPos": { "x": 12, "y": 95, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "dropped" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "sent",
+          "expr": "sum by (cache_bucket, operation) (rate(mycorrhizal_geo_replication_sent_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "sent {{operation}} / {{cache_bucket}}"
+        },
+        {
+          "refId": "received",
+          "expr": "sum by (cache_bucket, operation) (rate(mycorrhizal_geo_replication_received_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "received {{operation}} / {{cache_bucket}}"
+        },
+        {
+          "refId": "dropped",
+          "expr": "sum by (cache_bucket) (rate(mycorrhizal_geo_replication_dropped_total{service_name=\"$service_name\", cache_bucket=~\"$bucket\"}[1m]))",
+          "legendFormat": "dropped / {{cache_bucket}}"
+        }
+      ]
+    },
+
+    { "id": 20, "type": "row", "title": "Logs", "gridPos": { "x": 0, "y": 103, "w": 24, "h": 1 }, "collapsed": false },
+
     {
       "id": 21,
       "type": "logs",
       "title": "All Logs",
-      "description": "All structured logs from the mycorrizal library",
-      "gridPos": { "x": 0, "y": 44, "w": 24, "h": 12 },
+      "description": "All structured logs from the mycorrhizal library",
+      "gridPos": { "x": 0, "y": 104, "w": 24, "h": 12 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "options": {
         "dedupStrategy": "none",
@@ -372,12 +682,13 @@
         }
       ]
     },
+
     {
       "id": 22,
       "type": "logs",
       "title": "Errors Only",
       "description": "Logs at ERROR level only",
-      "gridPos": { "x": 0, "y": 56, "w": 24, "h": 12 },
+      "gridPos": { "x": 0, "y": 116, "w": 24, "h": 12 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "options": {
         "dedupStrategy": "none",
@@ -396,18 +707,16 @@
         }
       ]
     },
+
     {
       "id": 23,
       "type": "timeseries",
       "title": "Log Rate by Level",
       "description": "Volume of log lines per second by severity level",
-      "gridPos": { "x": 0, "y": 68, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 128, "w": 24, "h": 8 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        },
+        "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 10 } },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "ERROR" },
@@ -435,5 +744,6 @@
         }
       ]
     }
+
   ]
 }

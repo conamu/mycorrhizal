@@ -71,6 +71,10 @@ func (g *geoCache) setLocationLocal(bucket, userID string, lat, lng float64, ttl
 		tier[cell][userID] = struct{}{}
 	}
 
+	isNew := true
+	if _, exists := s.points[userID]; exists {
+		isNew = false
+	}
 	s.points[userID] = entry
 	s.Unlock()
 
@@ -82,6 +86,9 @@ func (g *geoCache) setLocationLocal(bucket, userID string, lat, lng float64, ttl
 		// Roll back the geo index so it doesn't hold an entry that will never be evicted.
 		g.deleteLocationLocal(bucket, userID) //nolint:errcheck
 		return err
+	}
+	if isNew {
+		g.recordGeoBucketSize(bucket, 1)
 	}
 	return nil
 }
@@ -96,7 +103,9 @@ func (g *geoCache) deleteLocationLocal(bucket, userID string) error {
 	}
 
 	s.Lock()
+	wasPresent := false
 	if entry, exists := s.points[userID]; exists {
+		wasPresent = true
 		for _, p := range s.precisions {
 			cell := geohash.EncodeWithPrecision(entry.Lat, entry.Lng, p)
 			tier := s.index[p]
@@ -111,6 +120,9 @@ func (g *geoCache) deleteLocationLocal(bucket, userID string) error {
 	}
 	s.Unlock()
 
+	if wasPresent {
+		g.recordGeoBucketSize(bucket, -1)
+	}
 	return g.cache.deleteLocal(bucket, userID)
 }
 
@@ -118,11 +130,15 @@ func (g *geoCache) deleteLocationLocal(bucket, userID string) error {
 // querying the index at the specified precision level.
 // precision must be one of the levels configured when the bucket was created.
 func (g *geoCache) BoundingBox(bucket string, minLat, minLng, maxLat, maxLng float64, precision uint) ([]GeoEntry, error) {
+	done := g.trackGeoQuery(bucket, "bounding_box")
+
 	s, err := g.getStore(bucket)
 	if err != nil {
+		done(0)
 		return nil, err
 	}
 	if !s.hasPrecision(precision) {
+		done(0)
 		return nil, ERR_BAD_PRECISION
 	}
 
@@ -163,6 +179,7 @@ func (g *geoCache) BoundingBox(bucket string, minLat, minLng, maxLat, maxLng flo
 		}
 	}
 
+	done(len(results))
 	return results, nil
 }
 
@@ -170,12 +187,52 @@ func (g *geoCache) BoundingBox(bucket string, minLat, minLng, maxLat, maxLng flo
 // querying the index at the specified precision level.
 // precision must be one of the levels configured when the bucket was created.
 func (g *geoCache) RadiusQuery(bucket string, lat, lng float64, radiusKm float64, precision uint) ([]GeoEntry, error) {
+	done := g.trackGeoQuery(bucket, "radius")
 	minLat, minLng, maxLat, maxLng := boundingBoxFromRadius(lat, lng, radiusKm)
 
-	candidates, err := g.BoundingBox(bucket, minLat, minLng, maxLat, maxLng, precision)
+	// BoundingBox already tracks its own query metrics; call the internal store
+	// lookup directly so we don't double-count the bounding_box query type.
+	s, err := g.getStore(bucket)
 	if err != nil {
+		done(0)
 		return nil, err
 	}
+	if !s.hasPrecision(precision) {
+		done(0)
+		return nil, ERR_BAD_PRECISION
+	}
+
+	cells := coveringCells(minLat, minLng, maxLat, maxLng, precision)
+	now := time.Now()
+
+	s.RLock()
+	tier := s.index[precision]
+	var candidates []GeoEntry
+	seenUsers := make(map[string]struct{})
+	for cell := range cells {
+		ids, ok := tier[cell]
+		if !ok {
+			continue
+		}
+		for userID := range ids {
+			if _, already := seenUsers[userID]; already {
+				continue
+			}
+			entry, exists := s.points[userID]
+			if !exists {
+				continue
+			}
+			if !entry.ExpiresAt.IsZero() && entry.ExpiresAt.Before(now) {
+				continue
+			}
+			if entry.Lat >= minLat && entry.Lat <= maxLat &&
+				entry.Lng >= minLng && entry.Lng <= maxLng {
+				candidates = append(candidates, entry)
+				seenUsers[userID] = struct{}{}
+			}
+		}
+	}
+	s.RUnlock()
 
 	var results []GeoEntry
 	for _, entry := range candidates {
@@ -183,6 +240,7 @@ func (g *geoCache) RadiusQuery(bucket string, lat, lng float64, radiusKm float64
 			results = append(results, entry)
 		}
 	}
+	done(len(results))
 	return results, nil
 }
 

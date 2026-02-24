@@ -113,6 +113,7 @@ func New(cfg *Config) (Mycel, error) {
 	// whenever a node joins or leaves the cluster.
 	m.ndsm.SetTopologyChangeHook(func(nodeId string, joined bool) {
 		m.cache.invalidateCaches()
+		m.cache.recordTopologyChange(joined)
 		m.rebalancer.triggerImmediate()
 	})
 
