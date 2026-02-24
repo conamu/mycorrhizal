@@ -86,7 +86,9 @@ func (c *cache) deleteLocal(bucket, key string) error {
 	if err != nil {
 		return err
 	}
-	b.Delete(key)
+	if found := b.Delete(key); !found {
+		return ERR_NOT_FOUND
+	}
 	c.keyVal.Delete(bucket + key)
 	c.nodeScoreHashMap.Lock()
 	delete(c.nodeScoreHashMap.data, bucket+key)
