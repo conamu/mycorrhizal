@@ -82,6 +82,19 @@ type Config struct {
 	QuicListenPort         int
 	QuicAdvertisePort      int
 	Debug                  bool
+	/*
+		RebalancerInterval controls how often the rebalancer checks key distribution
+		across the cluster. Lower values react faster to topology changes.
+		Defaults to 30s if zero.
+	*/
+	RebalancerInterval time.Duration
+	/*
+		StartupDelay adds a fixed wait after all internal components have signalled
+		ready but before the top-level Ready() call unblocks. Use this to let QUIC
+		connections and the initial rebalancer cycle settle before traffic flows.
+		Zero means no delay.
+	*/
+	StartupDelay time.Duration
 }
 
 func GetDefaultClusterConfig() *Config {

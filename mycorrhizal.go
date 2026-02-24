@@ -46,6 +46,7 @@ type mycorrhizal struct {
 	mycel           mycel.Mycel
 	debug           bool
 	debugHttpServer *http.Server
+	startupDelay    time.Duration
 	readyChan       chan any
 }
 
@@ -174,6 +175,7 @@ func New(cfg *Config) (Mycorrhizal, error) {
 		nodosum:       ndsm,
 		mycel:         mcl,
 		debug:         cfg.Debug,
+		startupDelay:  cfg.StartupDelay,
 		readyChan:     make(chan any),
 	}, nil
 }
@@ -212,6 +214,16 @@ func (mc *mycorrhizal) Start() error {
 	})
 	mc.wg.Add(1)
 	wg.Wait()
+	if mc.startupDelay > 0 {
+		mc.logger.Info("mycorrhizal components ready, waiting for startup delay", "delay", mc.startupDelay)
+		timer := time.NewTimer(mc.startupDelay)
+		select {
+		case <-timer.C:
+		case <-mc.ctx.Done():
+			timer.Stop()
+			return errors.New("context canceled during startup delay")
+		}
+	}
 	mc.logger.Info("mycorrhizal startup complete")
 	mc.logger.Debug(fmt.Sprintf("mycorrhizal node id %s", mc.nodeId))
 	close(mc.readyChan)
