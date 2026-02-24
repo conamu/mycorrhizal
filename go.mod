@@ -16,8 +16,6 @@ exclude github.com/armon/go-metrics v0.5.3
 
 exclude github.com/armon/go-metrics v0.5.4
 
-replace github.com/conamu/go-worker v0.0.0-20251018235130-fdbc90421e7a => /Users/constantinamundsen/go/github.com/conamu/go-worker
-
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/conamu/go-worker v0.0.0-20251018235130-fdbc90421e7a
