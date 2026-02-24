@@ -61,12 +61,11 @@ func New(cfg *Config) (Mycorrhizal, error) {
 		id = uuid.NewString()
 	}
 
-	if cfg.CaCert == nil {
-		return nil, errors.New("missing CA certificate. Provide an intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
+	if len(cfg.CaCertPEM) == 0 {
+		return nil, errors.New("missing CA certificate. Provide a PEM-encoded intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
 	}
-
-	if cfg.CaKey == nil {
-		return nil, errors.New("missing CA key. Provide an intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
+	if len(cfg.CaKeyPEM) == 0 {
+		return nil, errors.New("missing CA key. Provide a PEM-encoded intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
 	}
 
 	var httpClient *http.Client
@@ -133,8 +132,8 @@ func New(cfg *Config) (Mycorrhizal, error) {
 		Wg:                &sync.WaitGroup{},
 		HandshakeTimeout:  cfg.HandshakeTimeout,
 		SharedSecret:      cfg.SharedSecret,
-		CACert:            cfg.CaCert,
-		CAKey:             cfg.CaKey,
+		CACertPEM:         cfg.CaCertPEM,
+		CAKeyPEM:          cfg.CaKeyPEM,
 		MemberlistConfig:  cfg.MemberlistConfig,
 		QuicListenPort:    cfg.QuicListenPort,
 		QuicAdvertisePort: cfg.QuicAdvertisePort,
