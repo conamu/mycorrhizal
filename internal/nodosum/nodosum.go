@@ -89,6 +89,13 @@ type quicApplicationStreams struct {
 }
 
 func New(cfg *Config) (*Nodosum, error) {
+	// Parse and validate CA cert/key first, before opening any sockets or
+	// creating connections, so misconfiguration fails fast and cleanly.
+	caCert, caKey, err := parseCAPEM(cfg.CACertPEM, cfg.CAKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+
 	localQuicAddr, err := net.ListenUDP("udp", &net.UDPAddr{Port: cfg.QuicListenPort})
 	if err != nil {
 		return nil, err
@@ -123,8 +130,8 @@ func New(cfg *Config) (*Nodosum, error) {
 		meter:                  cfg.Meter,
 		applications:           &applications{applications: make(map[string]*application)},
 		wg:                     cfg.Wg,
-		tlsCaCert:              nil,
-		tlsCaKey:               nil,
+		tlsCaCert:              caCert,
+		tlsCaKey:               caKey,
 		readyChan:              make(chan any),
 	}
 
@@ -149,13 +156,6 @@ func New(cfg *Config) (*Nodosum, error) {
 
 	n.delegate = delegate
 	n.ml = ml
-
-	caCert, caKey, err := parseCAPEM(cfg.CACertPEM, cfg.CAKeyPEM)
-	if err != nil {
-		return nil, err
-	}
-	n.tlsCaCert = caCert
-	n.tlsCaKey = caKey
 
 	nodeCert, caCert, err := n.generateNodeCert()
 	if err != nil {
