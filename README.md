@@ -1,5 +1,18 @@
-# THIS IS A WIP, WILL NOT YET ACCEPT PRs
+# THIS IS A WIP LEARNING PROJECT
 (If you happen to stumble on this project lol)
+
+I primarily wanted to build something unique, enabling ditributed monolithic architectures.
+Turns out it was a great learning experience. Both in how caches and datastructures work, 
+how hard networking can be in software development and why engineering decissions are taken the way they are nowadays.
+
+Also I learned a lot about why we choose Valkey and Postgres for storage and caching for almost every project!
+
+I have the uttermost respect for the people who build these systems.
+
+All code in here was written by me. The last part, completing the rebalancer and some parts of the geospatial index cache have been written in assistance of Claude Code.
+All the engineering effort, research, ideas, etc... where done by me. Claude assisted in writing the research documents in the Docs folder to save time on google.
+
+It is usable, I tested it on a test application server. It ofcourse is nowhere near as fast as redis but its still usable to play around with or maybe prototype distributed systems.
 
 # Mycorrizal
 The embedded Library for scalable, modern and efficient modular Monoliths
