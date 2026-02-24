@@ -113,6 +113,8 @@ func GetDefaultClusterConfig() *Config {
 		MemberlistConfig:       memberlist.DefaultLocalConfig(),
 		CacheReplicaCount:      3,
 		CacheRemoteTimeout:     100 * time.Millisecond,
+		RebalancerInterval:     10 * time.Second,
+		StartupDelay:           30 * time.Second,
 	}
 }
 
