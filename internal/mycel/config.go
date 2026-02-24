@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/conamu/mycorrizal/internal/nodosum"
+	"github.com/conamu/mycorrhizal/internal/nodosum"
 	"go.opentelemetry.io/otel/metric"
 )
 

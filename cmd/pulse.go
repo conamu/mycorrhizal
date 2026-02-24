@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/conamu/mycorrizal/internal/nodosum"
+	"github.com/conamu/mycorrhizal/internal/nodosum"
 )
 
 func main() {

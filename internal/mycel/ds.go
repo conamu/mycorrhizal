@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/conamu/mycorrizal/internal/nodosum"
+	"github.com/conamu/mycorrhizal/internal/nodosum"
 	"go.opentelemetry.io/otel/metric"
 )
 
@@ -37,12 +37,12 @@ Other allowed interactions:
 */
 
 const (
-	GET     uint8 = 0x00
-	SET     uint8 = 0x01
-	SETTTL  uint8 = 0x02
-	DELETE  uint8 = 0x03
+	GET      uint8 = 0x00
+	SET      uint8 = 0x01
+	SETTTL   uint8 = 0x02
+	DELETE   uint8 = 0x03
 	RESPONSE uint8 = 0x04
-	GEO_SET uint8 = 0x05
+	GEO_SET  uint8 = 0x05
 )
 
 // bucketType distinguishes regular rendezvous-distributed buckets from
@@ -194,7 +194,6 @@ func (c *cache) getReplicas(key string) []replicaNode {
 
 	return scoredNodes
 }
-
 
 // LRU DLL Methods
 
