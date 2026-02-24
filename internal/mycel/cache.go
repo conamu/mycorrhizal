@@ -216,14 +216,17 @@ func (c *cache) setReplicated(bucket, key string, value any, ttl time.Duration) 
 	for range replicaSet {
 		if err := <-results; err == nil {
 			successCount++
+			c.recordReplicaWrite(bucket, "success")
 		} else {
 			c.logger.Warn(fmt.Sprintf("replica write failed for key %s/%s: %v", bucket, key, err))
+			c.recordReplicaWrite(bucket, "failure")
 			lastErr = err
 		}
 	}
 
 	quorum := (len(replicaSet) / 2) + 1
 	if successCount < quorum {
+		c.recordQuorumFailure(bucket)
 		return fmt.Errorf("write failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
 	}
 	return nil
@@ -260,14 +263,17 @@ func (c *cache) deleteReplicated(bucket, key string) error {
 	for range replicaSet {
 		if err := <-results; err == nil {
 			successCount++
+			c.recordReplicaWrite(bucket, "success")
 		} else {
 			c.logger.Warn(fmt.Sprintf("replica delete failed for key %s/%s: %v", bucket, key, err))
+			c.recordReplicaWrite(bucket, "failure")
 			lastErr = err
 		}
 	}
 
 	quorum := (len(replicaSet) / 2) + 1
 	if successCount < quorum {
+		c.recordQuorumFailure(bucket)
 		return fmt.Errorf("delete failed quorum %d/%d: %w", successCount, len(replicaSet), lastErr)
 	}
 	return nil

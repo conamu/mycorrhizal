@@ -97,6 +97,7 @@ type cache struct {
 }
 
 type metrics struct {
+	// Cache operations
 	gets         metric.Int64Counter
 	sets         metric.Int64Counter
 	deletes      metric.Int64Counter
@@ -108,6 +109,28 @@ type metrics struct {
 	bucketSize   metric.Int64UpDownCounter
 	duration     metric.Int64Histogram
 	errors       metric.Int64Counter
+	// Distributed write path
+	replicaWrites  metric.Int64Counter
+	quorumFailures metric.Int64Counter
+	// Rebalancer
+	rebalancerCycles              metric.Int64Counter
+	rebalancerKeysProcessed       metric.Int64Counter
+	rebalancerKeysEvicted         metric.Int64Counter
+	rebalancerReplicationAttempts metric.Int64Counter
+	rebalancerReplicationErrors   metric.Int64Counter
+	rebalancerDuration            metric.Int64Histogram
+	// Cluster / topology
+	topologyChanges metric.Int64Counter
+	// Geo cache
+	geoSets                metric.Int64Counter
+	geoDeletes             metric.Int64Counter
+	geoQueries             metric.Int64Counter
+	geoQueryResults        metric.Int64Histogram
+	geoQueryDuration       metric.Int64Histogram
+	geoReplicationSent     metric.Int64Counter
+	geoReplicationReceived metric.Int64Counter
+	geoReplicationDropped  metric.Int64Counter
+	geoBucketSize          metric.Int64UpDownCounter
 }
 
 type keyVal struct {
@@ -293,7 +316,9 @@ func (l *lruBucket) Push(n *node) {
 	n.prev = nil
 }
 
-func (l *lruBucket) Delete(key string) {
+// Delete removes the node with the given key from the bucket and returns true if
+// a node was found and removed, or false if the key was not present.
+func (l *lruBucket) Delete(key string) bool {
 	l.Lock()
 	defer l.Unlock()
 
@@ -338,12 +363,13 @@ func (l *lruBucket) Delete(key string) {
 			n.Unlock()
 
 			l.len--
-			return
+			return true
 		}
 		n.RUnlock()
 		n = n.next
 	}
 
+	return false
 }
 
 // keyVal methods

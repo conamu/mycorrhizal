@@ -193,8 +193,17 @@ func (r *rebalancer) rebalancerWorkerTask(w *worker.Worker, msg any) {
 		}
 	}
 
+	elapsed := time.Since(start)
+	r.cache.recordRebalancerCycle(
+		elapsed.Milliseconds(),
+		int64(keysProcessed),
+		int64(keysDeleted),
+		int64(replicationAttempts),
+		int64(replicationErrors),
+	)
+
 	w.Logger.Info("rebalancer cycle complete",
-		slog.Duration("duration", time.Since(start)),
+		slog.Duration("duration", elapsed),
 		slog.Int("keysProcessed", keysProcessed),
 		slog.Int("keysDeleted", keysDeleted),
 		slog.Int("replicationAttempts", replicationAttempts),

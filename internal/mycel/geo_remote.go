@@ -38,6 +38,8 @@ func decodeGeoPayload(data []byte) (*geoPayload, error) {
 
 // SetLocation writes the location locally then broadcasts to all other nodes.
 func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time.Duration) error {
+	g.recordGeoSet(bucket)
+
 	// 1. Write locally first.
 	if err := g.setLocationLocal(bucket, userID, lat, lng, ttl); err != nil {
 		return err
@@ -75,6 +77,7 @@ func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time
 
 	// Broadcast fire-and-forget in a goroutine so a slow or stalled QUIC
 	// stream write never blocks the caller's goroutine.
+	g.recordGeoReplicationSent(bucket, "set")
 	go func() {
 		if err := g.app.Send(payload, []string{}); err != nil {
 			g.logger.Warn("geo: replication broadcast failed", "error", err)
@@ -88,6 +91,8 @@ func (g *geoCache) SetLocation(bucket, userID string, lat, lng float64, ttl time
 // If the entry is absent locally (ERR_USER_NOT_FOUND / ERR_NO_GEO_BUCKET) the
 // broadcast is still sent so peers converge to the deleted state.
 func (g *geoCache) DeleteLocation(bucket, userID string) error {
+	g.recordGeoDelete(bucket)
+
 	if err := g.deleteLocationLocal(bucket, userID); err != nil {
 		if !errors.Is(err, ERR_USER_NOT_FOUND) && !errors.Is(err, ERR_NO_GEO_BUCKET) {
 			return err
@@ -108,6 +113,7 @@ func (g *geoCache) DeleteLocation(bucket, userID string) error {
 
 	// Broadcast fire-and-forget in a goroutine so a slow or stalled QUIC
 	// stream write never blocks the caller's goroutine.
+	g.recordGeoReplicationSent(bucket, "delete")
 	go func() {
 		if err := g.app.Send(payload, []string{}); err != nil {
 			g.logger.Warn("geo: delete replication broadcast failed", "error", err)
@@ -144,12 +150,15 @@ func (c *cache) handleGeoReceive(data []byte) error {
 			if remainingTTL <= 0 {
 				// Already expired in transit — skip the write entirely.
 				c.logger.Debug("geo: dropping expired replicated SET", "bucket", p.Bucket, "user", p.UserID)
+				c.geo.recordGeoReplicationDropped(p.Bucket)
 				return nil
 			}
 		}
+		c.geo.recordGeoReplicationReceived(p.Bucket, "set")
 		return c.geo.setLocationLocal(p.Bucket, p.UserID, p.Lat, p.Lng, remainingTTL)
 	case DELETE:
 		c.logger.Debug("geo: received replicated DELETE", "bucket", p.Bucket, "user", p.UserID)
+		c.geo.recordGeoReplicationReceived(p.Bucket, "delete")
 		if err := c.geo.deleteLocationLocal(p.Bucket, p.UserID); err != nil {
 			// ERR_USER_NOT_FOUND is expected (entry may have already been evicted or
 			// never existed on this replica) — log at DEBUG to aid troubleshooting.
