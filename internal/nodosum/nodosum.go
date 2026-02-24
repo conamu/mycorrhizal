@@ -135,6 +135,31 @@ func New(cfg *Config) (*Nodosum, error) {
 		readyChan:              make(chan any),
 	}
 
+	// Generate the node cert and build tlsConfig before memberlist.Create(), because
+	// Create() may call NotifyJoin synchronously (via mergeRemoteState during the initial
+	// push/pull), which calls createDialTLSConfig → tlsConfig.Clone(). If tlsConfig is
+	// nil at that point the clone panics and the QUIC connection is never established.
+	nodeCert, nodeCaCert, err := n.generateNodeCert()
+	if err != nil {
+		// Close the UDP socket we opened above — memberlist hasn't started yet so
+		// quicTransport.Close() is the only cleanup needed.
+		quicTransport.Close()
+		cancel()
+		return nil, err
+	}
+
+	ca := x509.NewCertPool()
+	ca.AddCert(nodeCaCert)
+	n.tlsConfig = &tls.Config{
+		MinVersion:   tls.VersionTLS13,
+		ServerName:   cfg.NodeId,
+		RootCAs:      ca,
+		ClientCAs:    ca, // For verifying client certificates
+		Certificates: []tls.Certificate{*nodeCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert, // Require mutual TLS
+		NextProtos:   []string{"mycorrizal"},
+	}
+
 	delegate := &Delegate{
 		Nodosum: n,
 		dta: &delegateDialAttempts{
@@ -151,28 +176,13 @@ func New(cfg *Config) (*Nodosum, error) {
 
 	ml, err := memberlist.Create(cfg.MemberlistConfig)
 	if err != nil {
+		quicTransport.Close()
+		cancel()
 		return nil, err
 	}
 
 	n.delegate = delegate
 	n.ml = ml
-
-	nodeCert, caCert, err := n.generateNodeCert()
-	if err != nil {
-		return nil, err
-	}
-
-	// Memberlist and Quic will only work with TLS. This library enforces the user to use TLS.
-	ca := x509.NewCertPool()
-	ca.AddCert(caCert)
-	n.tlsConfig = &tls.Config{
-		ServerName:   cfg.NodeId,
-		RootCAs:      ca,
-		ClientCAs:    ca, // For verifying client certificates
-		Certificates: []tls.Certificate{*nodeCert},
-		ClientAuth:   tls.RequireAndVerifyClientCert, // Require mutual TLS
-		NextProtos:   []string{"mycorrizal"},
-	}
 
 	return n, nil
 }
