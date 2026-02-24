@@ -49,6 +49,18 @@ func parseCAPEM(certPEM, keyPEM []byte) (*x509.Certificate, *rsa.PrivateKey, err
 		return nil, nil, fmt.Errorf("CaKeyPEM: unsupported PEM block type %q", keyBlock.Type)
 	}
 
+	if !caCert.IsCA {
+		return nil, nil, errors.New("CaCertPEM: certificate is not a CA certificate")
+	}
+
+	certPubKey, ok := caCert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, nil, errors.New("CaCertPEM: certificate public key is not RSA")
+	}
+	if certPubKey.N.Cmp(caKey.PublicKey.N) != 0 || certPubKey.E != caKey.PublicKey.E {
+		return nil, nil, errors.New("CaKeyPEM: private key does not match certificate public key")
+	}
+
 	return caCert, caKey, nil
 }
 
