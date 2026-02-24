@@ -14,6 +14,8 @@ All the engineering effort, research, ideas, etc... where done by me. Claude ass
 
 It is usable, I tested it on a test application server. It ofcourse is nowhere near as fast as redis but its still usable to play around with or maybe prototype distributed systems.
 
+Below the vision of this wild and weird project: I tried to model a leaderless distributed system after mycelium networks.
+
 # Mycorrizal
 The embedded Library for scalable, modern and efficient modular Monoliths
 
