@@ -2,8 +2,6 @@ package nodosum
 
 import (
 	"context"
-	"crypto/rsa"
-	"crypto/x509"
 	"log/slog"
 	"sync"
 	"time"
@@ -22,8 +20,8 @@ type Config struct {
 	Logger            *slog.Logger
 	Meter             metric.Meter
 	Wg                *sync.WaitGroup
-	CACert            *x509.Certificate
-	CAKey             *rsa.PrivateKey
+	CACertPEM         []byte
+	CAKeyPEM          []byte
 	MemberlistConfig  *memberlist.Config
 	QuicListenPort    int
 	QuicAdvertisePort int

@@ -2,7 +2,6 @@ package mycorrhizal
 
 import (
 	"context"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"log/slog"
@@ -71,10 +70,10 @@ type Config struct {
 		Default: 2 seconds
 	*/
 	HandshakeTimeout time.Duration
-	// CaCert is mandatory
-	CaCert *x509.Certificate
-	// CaKey is mandatory
-	CaKey                  *rsa.PrivateKey
+	// CaCertPEM is mandatory. PEM-encoded intermediate CA certificate.
+	CaCertPEM []byte
+	// CaKeyPEM is mandatory. PEM-encoded intermediate CA private key (PKCS1 or PKCS8).
+	CaKeyPEM               []byte
 	MultiplexerBufferSize  int
 	MultiplexerWorkerCount int
 	CacheReplicaCount      int
