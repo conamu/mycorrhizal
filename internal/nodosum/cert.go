@@ -52,6 +52,9 @@ func parseCAPEM(certPEM, keyPEM []byte) (*x509.Certificate, *rsa.PrivateKey, err
 	if !caCert.IsCA {
 		return nil, nil, errors.New("CaCertPEM: certificate is not a CA certificate")
 	}
+	if caCert.KeyUsage != 0 && caCert.KeyUsage&x509.KeyUsageCertSign == 0 {
+		return nil, nil, errors.New("CaCertPEM: certificate is not permitted to sign certificates")
+	}
 
 	certPubKey, ok := caCert.PublicKey.(*rsa.PublicKey)
 	if !ok {
