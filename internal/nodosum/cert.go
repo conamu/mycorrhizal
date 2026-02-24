@@ -6,11 +6,51 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
 	"time"
 )
+
+func parseCAPEM(certPEM, keyPEM []byte) (*x509.Certificate, *rsa.PrivateKey, error) {
+	certBlock, _ := pem.Decode(certPEM)
+	if certBlock == nil {
+		return nil, nil, errors.New("CaCertPEM: failed to decode PEM block")
+	}
+	caCert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("CaCertPEM: %w", err)
+	}
+
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return nil, nil, errors.New("CaKeyPEM: failed to decode PEM block")
+	}
+	var caKey *rsa.PrivateKey
+	switch keyBlock.Type {
+	case "RSA PRIVATE KEY":
+		caKey, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, nil, fmt.Errorf("CaKeyPEM (PKCS1): %w", err)
+		}
+	case "PRIVATE KEY":
+		parsed, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, nil, fmt.Errorf("CaKeyPEM (PKCS8): %w", err)
+		}
+		var ok bool
+		caKey, ok = parsed.(*rsa.PrivateKey)
+		if !ok {
+			return nil, nil, errors.New("CaKeyPEM: only RSA private keys are supported")
+		}
+	default:
+		return nil, nil, fmt.Errorf("CaKeyPEM: unsupported PEM block type %q", keyBlock.Type)
+	}
+
+	return caCert, caKey, nil
+}
 
 func (n *Nodosum) generateNodeCert(additionalIPs ...net.IP) (*tls.Certificate, *x509.Certificate, error) {
 

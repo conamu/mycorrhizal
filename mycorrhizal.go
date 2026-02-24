@@ -2,10 +2,7 @@ package mycorrhizal
 
 import (
 	"context"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
@@ -69,40 +66,6 @@ func New(cfg *Config) (Mycorrhizal, error) {
 	}
 	if len(cfg.CaKeyPEM) == 0 {
 		return nil, errors.New("missing CA key. Provide a PEM-encoded intermediary CA certificate and key for the cluster to secure itself with automatically generated client certificates")
-	}
-
-	certBlock, _ := pem.Decode(cfg.CaCertPEM)
-	if certBlock == nil {
-		return nil, errors.New("CaCertPEM: failed to decode PEM block")
-	}
-	caCert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("CaCertPEM: %w", err)
-	}
-
-	keyBlock, _ := pem.Decode(cfg.CaKeyPEM)
-	if keyBlock == nil {
-		return nil, errors.New("CaKeyPEM: failed to decode PEM block")
-	}
-	var caKey *rsa.PrivateKey
-	switch keyBlock.Type {
-	case "RSA PRIVATE KEY":
-		caKey, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("CaKeyPEM (PKCS1): %w", err)
-		}
-	case "PRIVATE KEY":
-		parsed, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("CaKeyPEM (PKCS8): %w", err)
-		}
-		var ok bool
-		caKey, ok = parsed.(*rsa.PrivateKey)
-		if !ok {
-			return nil, errors.New("CaKeyPEM: only RSA private keys are supported")
-		}
-	default:
-		return nil, fmt.Errorf("CaKeyPEM: unsupported PEM block type %q", keyBlock.Type)
 	}
 
 	var httpClient *http.Client
@@ -169,8 +132,8 @@ func New(cfg *Config) (Mycorrhizal, error) {
 		Wg:                &sync.WaitGroup{},
 		HandshakeTimeout:  cfg.HandshakeTimeout,
 		SharedSecret:      cfg.SharedSecret,
-		CACert:            caCert,
-		CAKey:             caKey,
+		CACertPEM:         cfg.CaCertPEM,
+		CAKeyPEM:          cfg.CaKeyPEM,
 		MemberlistConfig:  cfg.MemberlistConfig,
 		QuicListenPort:    cfg.QuicListenPort,
 		QuicAdvertisePort: cfg.QuicAdvertisePort,

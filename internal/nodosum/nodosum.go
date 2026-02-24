@@ -123,8 +123,8 @@ func New(cfg *Config) (*Nodosum, error) {
 		meter:                  cfg.Meter,
 		applications:           &applications{applications: make(map[string]*application)},
 		wg:                     cfg.Wg,
-		tlsCaCert:              cfg.CACert,
-		tlsCaKey:               cfg.CAKey,
+		tlsCaCert:              nil,
+		tlsCaKey:               nil,
 		readyChan:              make(chan any),
 	}
 
@@ -149,6 +149,13 @@ func New(cfg *Config) (*Nodosum, error) {
 
 	n.delegate = delegate
 	n.ml = ml
+
+	caCert, caKey, err := parseCAPEM(cfg.CACertPEM, cfg.CAKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+	n.tlsCaCert = caCert
+	n.tlsCaKey = caKey
 
 	nodeCert, caCert, err := n.generateNodeCert()
 	if err != nil {
